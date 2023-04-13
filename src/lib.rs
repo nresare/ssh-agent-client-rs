@@ -1,40 +1,24 @@
 extern crate core;
 
-use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug, Formatter};
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use bytes::Bytes;
 
 mod codec;
+mod error;
 
+pub use self::error::Error;
+pub use self::error::Result;
+
+#[allow(dead_code)]
 pub struct Client<'a> {
     reader: Box<dyn Read + 'a>,
     writer: Box<dyn Write + 'a>,
 }
 
-#[derive(Debug)]
-pub enum Error {
-    UnknownMessageType,
-    IO(std::io::Error)
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        todo!()
-    }
-}
-
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match *self {
-            Error::IO(ref e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
+#[derive(Debug, PartialEq)]
 pub struct Identity {
     public_key: Bytes,
     comment: String,
@@ -83,6 +67,6 @@ mod tests {
         let r = b"\xde\xad\xbe\xef".as_slice();
         let client = Client::from_reader_and_writer(r, w);
 
-        let result = client.list_identities().unwrap();
+        let _result = client.list_identities().unwrap();
     }
 }
