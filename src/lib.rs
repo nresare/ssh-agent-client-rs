@@ -15,16 +15,15 @@ mod testutil;
 pub use self::error::Error;
 pub use self::error::Result;
 
-#[allow(dead_code)]
 pub struct Client {
     reader: Box<dyn Read>,
     writer: Box<dyn Write>,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Identity {
-    public_key: Bytes,
-    comment: String,
+pub struct Identity<> {
+    pub public_key: Bytes,
+    pub comment: String,
 }
 
 impl Client {
