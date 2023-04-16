@@ -31,8 +31,8 @@ pub fn read_message(input: &mut dyn Read) -> Result<Message> {
 pub fn write_message(output: &mut dyn Write, message: Message) -> Result<()> {
     match message {
         Message::RequestIdentities => {
-            output.write(&1_u32.to_be_bytes())?;
-            output.write(&[SSH_AGENTC_REQUEST_IDENTITIES])?;
+            output.write_all(&1_u32.to_be_bytes())?;
+            output.write_all(&[SSH_AGENTC_REQUEST_IDENTITIES])?;
         },
         _ => return Err(UnknownMessageType),
     }
@@ -55,7 +55,7 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
 fn make_identities(mut buf: Bytes) -> Vec<Identity> {
     let len = buf.get_u32() as usize;
 
-    let mut result = Vec::with_capacity(len as usize);
+    let mut result = Vec::with_capacity(len);
     for _ in 0..len {
         let key_len = buf.get_u32() as usize;
         let public_key = Bytes::from(buf.chunk()[..key_len].to_vec());
