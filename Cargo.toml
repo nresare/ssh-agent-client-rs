@@ -1,9 +1,11 @@
 [package]
 name = "ssh-agent-client-rs"
 version = "0.1.0"
+description = """
+Pure rust implementation of the ssh-agent protocol. It can be used to write clients that interact with the ssh agent.
+"""
 edition = "2021"
-
 
 [dependencies]
 bytes = "1.4.0"
-
+ssh-key = "0.5.1"
