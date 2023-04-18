@@ -11,6 +11,7 @@ mod codec;
 mod error;
 #[cfg(test)]
 mod testutil;
+pub mod bits;
 
 pub use self::error::Error;
 pub use self::error::Result;
