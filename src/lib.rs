@@ -1,6 +1,6 @@
 extern crate core;
 
-use crate::codec::{read_message, write_message, Message};
+use crate::codec::{read_message, write_message, ReadMessage, WriteMessage};
 use bytes::Bytes;
 use std::fmt::Debug;
 use std::io::{Read, Write};
@@ -39,10 +39,10 @@ impl Client {
 
     /// Lists the identities that the ssh-agent has access to.
     pub fn list_identities(&mut self) -> Result<Vec<Identity>> {
-        write_message(&mut self.writer, Message::RequestIdentities)?;
+        write_message(&mut self.writer, WriteMessage::RequestIdentities)?;
         let message = read_message(&mut self.reader)?;
         match message {
-            Message::IdentitiesAnswer(identities) => Ok(identities),
+            ReadMessage::Identities(identities) => Ok(identities),
             _ => Err(Error::UnknownMessageType),
         }
     }
