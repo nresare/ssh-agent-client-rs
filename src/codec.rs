@@ -91,7 +91,6 @@ mod test {
         }
     }
 
-
     #[test]
     fn test_make_identities() {
         let bytes = Bytes::from_static(

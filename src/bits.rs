@@ -1,6 +1,7 @@
 use ssh_key::public::KeyData;
 use ssh_key::{EcdsaCurve, MPInt, PublicKey};
 
+/// Returns the key size in bits for different PublicKey variants.
 pub fn key_bits(key: &PublicKey) -> usize {
     match key.key_data() {
         KeyData::Rsa(k) => get_bits(&k.n),
