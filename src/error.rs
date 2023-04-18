@@ -5,7 +5,7 @@ use std::fmt::{Display, Formatter};
 pub enum Error {
     UnknownMessageType,
     InvalidData,
-    IO(std::io::Error)
+    IO(std::io::Error),
 }
 
 impl Display for Error {
@@ -28,6 +28,5 @@ impl From<std::io::Error> for Error {
         Error::IO(e)
     }
 }
-
 
 pub type Result<T> = std::result::Result<T, Error>;

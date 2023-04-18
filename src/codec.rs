@@ -1,7 +1,7 @@
-use std::io::{Read, Write};
+use crate::Error::UnknownMessageType;
 use crate::{Identity, Result};
 use bytes::{Buf, Bytes, BytesMut};
-use crate::Error::UnknownMessageType;
+use std::io::{Read, Write};
 
 type MessageTypeId = u8;
 // This list is copied from
@@ -15,7 +15,6 @@ pub enum Message {
     IdentitiesAnswer(Vec<Identity>),
 }
 
-
 pub fn read_message(input: &mut dyn Read) -> Result<Message> {
     let (t, buf) = read_packet(input)?;
     match t {
@@ -24,7 +23,7 @@ pub fn read_message(input: &mut dyn Read) -> Result<Message> {
             // TODO: convert this to proper logging
             println!("Don't recognise message type {}", t);
             Err(UnknownMessageType)
-        },
+        }
     }
 }
 
@@ -33,7 +32,7 @@ pub fn write_message(output: &mut dyn Write, message: Message) -> Result<()> {
         Message::RequestIdentities => {
             output.write_all(&1_u32.to_be_bytes())?;
             output.write_all(&[SSH_AGENTC_REQUEST_IDENTITIES])?;
-        },
+        }
         _ => return Err(UnknownMessageType),
     }
     Ok(())
@@ -66,51 +65,56 @@ fn make_identities(mut buf: Bytes) -> Vec<Identity> {
         let comment = std::str::from_utf8(comment).unwrap().to_string();
         buf.advance(comment_len);
 
-        result.push(Identity{public_key, comment});
+        result.push(Identity {
+            public_key,
+            comment,
+        });
     }
     result
 }
 
-
 #[cfg(test)]
 mod test {
-    use crate::codec::{read_message, Message, make_identities, write_message};
+    use crate::codec::{make_identities, read_message, write_message, Message};
     use crate::testutil::reader;
-    use bytes::Bytes;
     use crate::Identity;
+    use bytes::Bytes;
 
     #[test]
     fn test_read_message() {
-        let result = read_message( &mut reader(b"\0\0\0\x05\x0c\0\0\0\0"))
-            .expect("Failed to read message");
+        let result =
+            read_message(&mut reader(b"\0\0\0\x05\x0c\0\0\0\0")).expect("Failed to read message");
         match result {
             Message::IdentitiesAnswer(identities) => {
                 assert_eq!(identities, vec![])
-            },
+            }
             _ => panic!("result was not IdentitiesAnswer"),
         }
     }
 
     #[test]
     fn test_make_identities() {
-        let bytes = Bytes::from_static(
-            b"\0\0\0\x02\0\0\0\x03foo\0\0\0\x03bar\0\0\0\x01a\0\0\0\x01b"
-        );
+        let bytes =
+            Bytes::from_static(b"\0\0\0\x02\0\0\0\x03foo\0\0\0\x03bar\0\0\0\x01a\0\0\0\x01b");
         assert_eq!(
             make_identities(bytes),
             vec![
-                Identity{public_key: Bytes::from(&b"foo"[..]), comment: "bar".to_string()},
-                Identity{public_key: Bytes::from(&b"a"[..]), comment: "b".to_string()}
+                Identity {
+                    public_key: Bytes::from(&b"foo"[..]),
+                    comment: "bar".to_string()
+                },
+                Identity {
+                    public_key: Bytes::from(&b"a"[..]),
+                    comment: "b".to_string()
+                }
             ]
-
         )
     }
 
     #[test]
     fn test_write_message() {
         let mut output: Vec<u8> = Vec::new();
-        write_message(&mut output, Message::RequestIdentities)
-            .expect("failed writing");
+        write_message(&mut output, Message::RequestIdentities).expect("failed writing");
         assert_eq!(vec![0_u8, 0, 0, 1, 11], output)
     }
 }
