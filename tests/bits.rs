@@ -1,22 +1,15 @@
-use ssh_key::PublicKey;
 use ssh_agent_client_rs::bits::key_bits;
-
-const OPENSSH_DSA: &str = include_str!("examples/id_dsa.pub");
-const OPENSSH_RSA: &str = include_str!("examples/id_rsa.pub");
-const OPENSSH_ED25519: &str = include_str!("examples/id_ed25519.pub");
-const OPENSSH_ECDSA_P256: &str = include_str!("examples/id_ecdsa_p256.pub");
-const OPENSSH_ECDSA_P521: &str = include_str!("examples/id_ecdsa_p521.pub");
+use ssh_key::PublicKey;
 
 #[test]
 fn test_key_length() {
-    let key = PublicKey::from_openssh(OPENSSH_RSA).unwrap();
-    assert_eq!(3072, key_bits(&key));
-    let key = PublicKey::from_openssh(OPENSSH_DSA).unwrap();
-    assert_eq!(1024, key_bits(&key));
-    let key = PublicKey::from_openssh(OPENSSH_ED25519).unwrap();
-    assert_eq!(256, key_bits(&key));
-    let key = PublicKey::from_openssh(OPENSSH_ECDSA_P256).unwrap();
-    assert_eq!(256, key_bits(&key));
-    let key = PublicKey::from_openssh(OPENSSH_ECDSA_P521).unwrap();
-    assert_eq!(521, key_bits(&key));
+    test_length(include_str!("data/id_dsa.pub"), 1024);
+    test_length(include_str!("data/id_rsa.pub"), 3072);
+    test_length(include_str!("data/id_ecdsa.pub"), 256);
+    test_length(include_str!("data/id_ed25519.pub"), 256);
+}
+
+fn test_length(pubkey: &str, length: usize) {
+    let key = PublicKey::from_openssh(pubkey).unwrap();
+    assert_eq!(length, key_bits(&key));
 }
