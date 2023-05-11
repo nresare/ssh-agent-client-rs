@@ -15,9 +15,6 @@ The basic idea is to create a `Client` instance and call its public methods to i
 
 This project is in early development. This is a roughly ordered todo-list:
 
-* Write code to add keys to an agent
-* Write to send and receive messages related to message signing
-* Figure out a more elegant way to assert on matches in the unit tests
 * Write an integration test that spins up an agent, adds a private key, signs a random message and validates the signature.
 
 ## License
