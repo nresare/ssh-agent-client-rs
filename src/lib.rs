@@ -48,8 +48,28 @@ impl Client {
         }
     }
 
+    /// Adds an identity to the ssh-agent
     pub fn add_identity(&mut self, key: PrivateKey) -> Result<()> {
         write_message(&mut self.writer, WriteMessage::AddIdentity(Box::new(key)))?;
+        self.expect_success()
+    }
+
+    /// Removes an identity from the ssh-agent
+    pub fn remove_identity(&mut self, key: PrivateKey) -> Result<()> {
+        write_message(
+            &mut self.writer,
+            WriteMessage::RemoveIdentity(Box::new(key)),
+        )?;
+        self.expect_success()
+    }
+
+    /// Removes an identity from the ssh-agent
+    pub fn remove_all_identities(&mut self) -> Result<()> {
+        write_message(&mut self.writer, WriteMessage::RemoveAllIdentities)?;
+        self.expect_success()
+    }
+
+    fn expect_success(&mut self) -> Result<()> {
         let response = read_message(&mut self.reader)?;
         match response {
             ReadMessage::Success => Ok(()),

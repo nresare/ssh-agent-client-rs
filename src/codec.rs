@@ -11,6 +11,8 @@ type MessageTypeId = u8;
 // https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent-04#section-5.1
 const SSH_AGENTC_REQUEST_IDENTITIES: MessageTypeId = 11;
 const SSH_AGENTC_ADD_IDENTITY: MessageTypeId = 17;
+const SSH_AGENTC_REMOVE_IDENTITY: MessageTypeId = 18;
+const SSH_AGENTC_REMOVE_ALL_IDENTITIES: MessageTypeId = 19;
 
 const SSH_AGENT_FAILURE: MessageTypeId = 5;
 const SSH_AGENT_SUCCESS: MessageTypeId = 6;
@@ -23,6 +25,8 @@ const MAX_MESSAGE_SIZE: u32 = 1024 * 1024;
 pub enum WriteMessage {
     RequestIdentities,
     AddIdentity(Box<PrivateKey>),
+    RemoveIdentity(Box<PrivateKey>),
+    RemoveAllIdentities,
 }
 
 pub enum ReadMessage {
@@ -44,16 +48,21 @@ pub fn read_message(input: &mut dyn Read) -> Result<ReadMessage> {
 pub fn write_message(output: &mut dyn Write, message: WriteMessage) -> Result<()> {
     let mut buf: Vec<u8> = Vec::new();
     match message {
-        WriteMessage::RequestIdentities => {
-            buf.write_all(&[SSH_AGENTC_REQUEST_IDENTITIES])?;
-        }
+        WriteMessage::RequestIdentities => buf.write_all(&[SSH_AGENTC_REQUEST_IDENTITIES])?,
         WriteMessage::AddIdentity(key) => {
             buf.write_all(&[SSH_AGENTC_ADD_IDENTITY])?;
-            let comment = key.comment();
             key.key_data().encode(&mut buf)?;
+
+            let comment = key.comment();
             write_len(comment.len(), &mut buf)?;
             buf.write_all(comment.as_ref())?
         }
+        WriteMessage::RemoveIdentity(key) => {
+            buf.write_all(&[SSH_AGENTC_REMOVE_IDENTITY])?;
+            write_len(key.public_key().key_data().encoded_len()?, &mut buf)?;
+            key.public_key().key_data().encode(&mut buf)?;
+        }
+        WriteMessage::RemoveAllIdentities => buf.write_all(&[SSH_AGENTC_REMOVE_ALL_IDENTITIES])?,
     }
     write_len(buf.len(), output)?;
     output.write_all(&buf)?;
@@ -222,5 +231,39 @@ mod test {
         add_identity!("ssh-add_dsa.bin", "id_dsa");
         add_identity!("ssh-add_ed25519.bin", "id_ed25519");
         add_identity!("ssh-add_ecdsa.bin", "id_ecdsa");
+    }
+
+    macro_rules! remove_identity {
+        ($message_path:expr, $key_path:expr) => {
+            let key = include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/data/",
+                $key_path
+            ));
+            let expected = include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/data/",
+                $message_path
+            ));
+            let mut output: Vec<u8> = Vec::new();
+            let key = PrivateKey::from_openssh(key).expect("failed to parse key");
+            write_message(&mut output, WriteMessage::RemoveIdentity(Box::new(key))).unwrap();
+            assert_eq!(expected, output.as_slice());
+        };
+    }
+
+    #[test]
+    fn test_write_remove_identity() {
+        remove_identity!("ssh-remove_rsa.bin", "id_rsa");
+        remove_identity!("ssh-remove_dsa.bin", "id_dsa");
+        remove_identity!("ssh-remove_ed25519.bin", "id_ed25519");
+        remove_identity!("ssh-remove_ecdsa.bin", "id_ecdsa");
+    }
+
+    #[test]
+    fn test_write_remove_all_identities() {
+        let mut output: Vec<u8> = Vec::new();
+        write_message(&mut output, WriteMessage::RemoveAllIdentities).expect("failed writing");
+        assert_eq!(vec![0_u8, 0, 0, 1, 19], output)
     }
 }
