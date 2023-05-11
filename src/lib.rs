@@ -2,6 +2,7 @@ extern crate core;
 
 use crate::codec::{read_message, write_message, ReadMessage, WriteMessage};
 use bytes::Bytes;
+use ssh_key::PrivateKey;
 use std::fmt::Debug;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
@@ -11,7 +12,7 @@ pub mod bits;
 mod codec;
 mod error;
 #[cfg(test)]
-mod testutil;
+pub mod testutil;
 
 pub use self::error::Error;
 pub use self::error::Result;
@@ -40,10 +41,20 @@ impl Client {
     /// Lists the identities that the ssh-agent has access to.
     pub fn list_identities(&mut self) -> Result<Vec<Identity>> {
         write_message(&mut self.writer, WriteMessage::RequestIdentities)?;
-        let message = read_message(&mut self.reader)?;
-        match message {
+        let response = read_message(&mut self.reader)?;
+        match response {
             ReadMessage::Identities(identities) => Ok(identities),
             _ => Err(Error::UnknownMessageType),
+        }
+    }
+
+    pub fn add_identity(&mut self, key: PrivateKey) -> Result<()> {
+        write_message(&mut self.writer, WriteMessage::AddIdentity(Box::new(key)))?;
+        let response = read_message(&mut self.reader)?;
+        match response {
+            ReadMessage::Success => Ok(()),
+            ReadMessage::Failure => Err(Error::RemoteFailure),
+            _ => Err(Error::InvalidData(Some("Unexpected response".to_string()))),
         }
     }
 }
