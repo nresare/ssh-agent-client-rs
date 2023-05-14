@@ -75,11 +75,8 @@ fn write_len(len: usize, output: &mut dyn Write) -> Result<()> {
 }
 
 fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
-    let mut f = std::fs::File::create("/tmp/output.bin")?;
-
     let mut buf = [0u8; 5];
     input.read_exact(&mut buf)?;
-    f.write(&buf)?;
     let mut buf = &buf[..];
     let len = buf.get_u32();
     let t = buf.get_u8();
@@ -93,7 +90,6 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
     }
     let mut bytes: BytesMut = BytesMut::zeroed(len as usize - 1);
     input.read_exact(bytes.as_mut())?;
-    f.write(bytes.as_ref())?;
     Ok((t, bytes.freeze()))
 }
 
