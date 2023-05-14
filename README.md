@@ -3,6 +3,12 @@
 `ssh-agent-client-rs` is a pure rust client library for interacting with an ssh-agent using the protocol defined in 
 [draft-miller-ssh-agent-04](https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent-04)
 
+The aim with the design of this library is to provide an easy-to-use and well tested 
+library that can be used to perform the most common tasks interacting with the `ssh-agent`.
+The API will always be synchronous, as that corresponds to most use cases, and unless 
+I get very bored at some point, it will probably not be a complete implementation of the
+protocol. However, contributions are more than welcome.
+
 It was inspired by [russh-agent](https://crates.io/crates/russh-agent) but the projects does not share any code.
 In particular this client only exposes a synchronous API which simplifies both the implementation and interface.
 
