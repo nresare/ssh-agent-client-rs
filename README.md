@@ -1,7 +1,7 @@
 # ssh-agent-client-rs
 
-![build](https://img.shields.io/github/actions/workflow/status/nresare/ssh-agent-client-rs/rust.yml?label=checks&logo=github&style=for-the-badge)
-![crates.io](https://img.shields.io/crates/v/ssh-agent-client-rs?color=fc8d62&logo=rust&style=for-the-badge)
+[![build](https://img.shields.io/github/actions/workflow/status/nresare/ssh-agent-client-rs/rust.yml?label=checks&logo=github&style=for-the-badge)](https://github.com/nresare/ssh-agent-client-rs/actions/workflows/rust.yml)
+[![crates.io](https://img.shields.io/crates/v/ssh-agent-client-rs?color=fc8d62&logo=rust&style=for-the-badge)](https://crates.io/crates/ssh-agent-client-rs)
 
 `ssh-agent-client-rs` is a pure rust client library for interacting with an ssh-agent using the protocol defined in 
 [draft-miller-ssh-agent-04](https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent-04)
