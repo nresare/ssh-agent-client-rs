@@ -1,9 +1,9 @@
 use crate::codec::ReadMessage::{Failure, Success};
 use crate::Error::UnknownMessageType;
-use crate::{Error, Identity, Result};
+use crate::{Error, Result};
 use bytes::{Buf, Bytes, BytesMut};
 use ssh_encoding::Encode;
-use ssh_key::PrivateKey;
+use ssh_key::{PrivateKey, PublicKey};
 use std::io::{Read, Write};
 
 type MessageTypeId = u8;
@@ -32,7 +32,7 @@ pub enum WriteMessage {
 pub enum ReadMessage {
     Failure,
     Success,
-    Identities(Vec<Identity>),
+    Identities(Vec<PublicKey>),
 }
 
 pub fn read_message(input: &mut dyn Read) -> Result<ReadMessage> {
@@ -40,7 +40,7 @@ pub fn read_message(input: &mut dyn Read) -> Result<ReadMessage> {
     match t {
         SSH_AGENT_FAILURE => Ok(Failure),
         SSH_AGENT_SUCCESS => Ok(Success),
-        SSH_AGENT_IDENTITIES_ANSWER => Ok(ReadMessage::Identities(make_identities(buf))),
+        SSH_AGENT_IDENTITIES_ANSWER => Ok(ReadMessage::Identities(make_identities(buf)?)),
         _ => Err(UnknownMessageType),
     }
 }
@@ -75,8 +75,11 @@ fn write_len(len: usize, output: &mut dyn Write) -> Result<()> {
 }
 
 fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
+    let mut f = std::fs::File::create("/tmp/output.bin")?;
+
     let mut buf = [0u8; 5];
     input.read_exact(&mut buf)?;
+    f.write(&buf)?;
     let mut buf = &buf[..];
     let len = buf.get_u32();
     let t = buf.get_u8();
@@ -90,6 +93,7 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
     }
     let mut bytes: BytesMut = BytesMut::zeroed(len as usize - 1);
     input.read_exact(bytes.as_mut())?;
+    f.write(bytes.as_ref())?;
     Ok((t, bytes.freeze()))
 }
 
@@ -97,13 +101,13 @@ fn invalid_data<T>(message: String) -> Result<T> {
     Err(Error::InvalidData(Some(message)))
 }
 
-fn make_identities(mut buf: Bytes) -> Vec<Identity> {
+fn make_identities(mut buf: Bytes) -> Result<Vec<PublicKey>> {
     let len = buf.get_u32() as usize;
 
     let mut result = Vec::with_capacity(len);
     for _ in 0..len {
         let key_len = buf.get_u32() as usize;
-        let public_key = Bytes::from(buf.chunk()[..key_len].to_vec());
+        let mut public_key = PublicKey::from_bytes(&buf.chunk()[..key_len])?;
         buf.advance(key_len);
 
         let comment_len = buf.get_u32() as usize;
@@ -111,21 +115,23 @@ fn make_identities(mut buf: Bytes) -> Vec<Identity> {
         let comment = std::str::from_utf8(comment).unwrap().to_string();
         buf.advance(comment_len);
 
-        result.push(Identity {
-            public_key,
-            comment,
-        });
+        public_key.set_comment(comment);
+        result.push(public_key);
     }
-    result
+    Ok(result)
 }
 
 #[cfg(test)]
 mod test {
     use crate::codec::{make_identities, read_message, write_message, ReadMessage, WriteMessage};
-    use crate::testutil::reader;
-    use crate::{Error, Identity};
+    use crate::Error;
     use bytes::Bytes;
-    use ssh_key::PrivateKey;
+    use ssh_key::{PrivateKey, PublicKey};
+    use std::io::Cursor;
+
+    pub fn reader(data: &'static [u8]) -> Cursor<&[u8]> {
+        Cursor::new(&data[..])
+    }
 
     #[test]
     fn test_read_message_identities_answer() {
@@ -182,21 +188,17 @@ mod test {
 
     #[test]
     fn test_make_identities() {
-        let bytes =
-            Bytes::from_static(b"\0\0\0\x02\0\0\0\x03foo\0\0\0\x03bar\0\0\0\x01a\0\0\0\x01b");
-        assert_eq!(
-            make_identities(bytes),
-            vec![
-                Identity {
-                    public_key: Bytes::from(&b"foo"[..]),
-                    comment: "bar".to_string()
-                },
-                Identity {
-                    public_key: Bytes::from(&b"a"[..]),
-                    comment: "b".to_string()
-                }
-            ]
-        )
+        let data = Bytes::from_static(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/identity_list_response.bin"
+        )));
+        let key = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/id_ed25519.pub"
+        ));
+        let key = PublicKey::from_openssh(key).unwrap();
+
+        assert_eq!(make_identities(data).expect("Could not decode"), vec![key])
     }
 
     #[test]
