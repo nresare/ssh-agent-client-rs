@@ -1,6 +1,8 @@
 [package]
 name = "ssh-agent-client-rs"
 version = "0.1.0"
+license = "MIT or Apache-2.0"
+repository = "https://github.com/nresare/ssh-agent-client-rs"
 description = """
 Pure rust implementation of the ssh-agent protocol. It can be used to write clients that interact with the ssh agent.
 """
@@ -10,6 +12,3 @@ edition = "2021"
 bytes = "1.4.0"
 ssh-key = "0.5.1"
 ssh-encoding = "0.1.0"
-
-[dev-dependencies]
-hexdump = "0.1.1"
