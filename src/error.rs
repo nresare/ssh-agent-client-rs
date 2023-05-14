@@ -1,13 +1,25 @@
+//! Error types
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::num::TryFromIntError;
 
+/// A Result variant with this module's `Error` as its error type
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// This enum represents the different Errors that might be returned
+/// by this crate.
 #[derive(Debug)]
 pub enum Error {
+    /// A message with an unknown type field was received.
     UnknownMessageType,
+    /// An invalid message was received, optionally holding a String with additional detail.
     InvalidData(Option<String>),
+    /// An operation returned a std::io::Error, enclosed with in the value optionally
+    /// along with a String detailing the context when the error occurred.
     IO(Option<String>, std::io::Error),
+    /// An operation returned a ssh_key::Error wrapped in this variant.
     SSHKey(ssh_key::Error),
+    /// An operation returned the Failure message from the remote ssh-agent.
     RemoteFailure,
 }
 
@@ -44,5 +56,3 @@ impl From<TryFromIntError> for Error {
         Error::InvalidData(Some("Value doesn't fit".to_string()))
     }
 }
-
-pub type Result<T> = std::result::Result<T, Error>;
