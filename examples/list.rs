@@ -1,5 +1,5 @@
 use ssh_agent_client_rs::bits::key_bits;
-use ssh_agent_client_rs::{Client, Identity, Result};
+use ssh_agent_client_rs::{Client, Result};
 use ssh_key::public::PublicKey;
 use std::env;
 use std::path::Path;
@@ -16,14 +16,12 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn print(identity: &Identity) {
-    let key =
-        PublicKey::from_bytes(identity.public_key.as_ref()).expect("failed to parse public key");
+fn print(key: &PublicKey) {
     println!(
         "{} {} {} {}",
         key_bits(&key),
         key.fingerprint(Default::default()),
-        identity.comment,
-        key.algorithm().to_string()
+        key.comment(),
+        key.algorithm().to_string(),
     )
 }

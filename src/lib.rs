@@ -1,9 +1,7 @@
 extern crate core;
 
 use crate::codec::{read_message, write_message, ReadMessage, WriteMessage};
-use bytes::Bytes;
-use ssh_key::PrivateKey;
-use std::fmt::Debug;
+use ssh_key::{PrivateKey, PublicKey};
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -11,37 +9,35 @@ use std::path::Path;
 pub mod bits;
 mod codec;
 mod error;
-#[cfg(test)]
-pub mod testutil;
 
 pub use self::error::Error;
 pub use self::error::Result;
 
+pub trait ReadWrite: Read + Write {}
+
 pub struct Client {
-    reader: Box<dyn Read>,
-    writer: Box<dyn Write>,
+    socket: Box<dyn ReadWrite>,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct Identity {
-    pub public_key: Bytes,
-    pub comment: String,
-}
+impl ReadWrite for UnixStream {}
 
 impl Client {
     /// Constructs a Client connected to a unix socket referenced by the path socket.
     pub fn connect(path: &Path) -> Result<Client> {
-        let socket = UnixStream::connect(path)?;
-        Ok(Client {
-            reader: Box::new(socket.try_clone()?),
-            writer: Box::new(socket.try_clone()?),
-        })
+        let socket = Box::new(UnixStream::connect(path)?);
+        Ok(Client { socket })
+    }
+
+    pub fn with_socket_like(socket_like: Box<dyn ReadWrite>) -> Client {
+        Client {
+            socket: socket_like,
+        }
     }
 
     /// Lists the identities that the ssh-agent has access to.
-    pub fn list_identities(&mut self) -> Result<Vec<Identity>> {
-        write_message(&mut self.writer, WriteMessage::RequestIdentities)?;
-        let response = read_message(&mut self.reader)?;
+    pub fn list_identities(&mut self) -> Result<Vec<PublicKey>> {
+        write_message(&mut self.socket, WriteMessage::RequestIdentities)?;
+        let response = read_message(&mut self.socket)?;
         match response {
             ReadMessage::Identities(identities) => Ok(identities),
             _ => Err(Error::UnknownMessageType),
@@ -50,14 +46,14 @@ impl Client {
 
     /// Adds an identity to the ssh-agent
     pub fn add_identity(&mut self, key: PrivateKey) -> Result<()> {
-        write_message(&mut self.writer, WriteMessage::AddIdentity(Box::new(key)))?;
+        write_message(&mut self.socket, WriteMessage::AddIdentity(Box::new(key)))?;
         self.expect_success()
     }
 
     /// Removes an identity from the ssh-agent
     pub fn remove_identity(&mut self, key: PrivateKey) -> Result<()> {
         write_message(
-            &mut self.writer,
+            &mut self.socket,
             WriteMessage::RemoveIdentity(Box::new(key)),
         )?;
         self.expect_success()
@@ -65,49 +61,16 @@ impl Client {
 
     /// Removes an identity from the ssh-agent
     pub fn remove_all_identities(&mut self) -> Result<()> {
-        write_message(&mut self.writer, WriteMessage::RemoveAllIdentities)?;
+        write_message(&mut self.socket, WriteMessage::RemoveAllIdentities)?;
         self.expect_success()
     }
 
     fn expect_success(&mut self) -> Result<()> {
-        let response = read_message(&mut self.reader)?;
+        let response = read_message(&mut self.socket)?;
         match response {
             ReadMessage::Success => Ok(()),
             ReadMessage::Failure => Err(Error::RemoteFailure),
             _ => Err(Error::InvalidData(Some("Unexpected response".to_string()))),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Client;
-    use crate::testutil::reader;
-    use crate::Identity;
-    use bytes::Bytes;
-    use std::io::Write;
-
-    fn from_reader_and_writer(reader: Box<dyn std::io::Read>, writer: Box<dyn Write>) -> Client {
-        Client { reader, writer }
-    }
-
-    #[test]
-    fn test_list_identities() {
-        // given
-        let w = Vec::new();
-        let r = reader(b"\0\0\0\x17\x0c\0\0\0\x01\0\0\0\x03key\0\0\0\x07comment");
-        let mut client = from_reader_and_writer(Box::new(r), Box::new(w));
-
-        // when
-        let result = client.list_identities().unwrap();
-
-        // then
-        assert_eq!(
-            vec![Identity {
-                public_key: Bytes::from_static(b"key"),
-                comment: "comment".to_string()
-            }],
-            result
-        );
     }
 }
