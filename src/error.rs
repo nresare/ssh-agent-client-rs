@@ -51,6 +51,12 @@ impl From<ssh_key::Error> for Error {
     }
 }
 
+impl From<signature::Error> for Error {
+    fn from(_: signature::Error) -> Self {
+        Error::InvalidData(Some(String::from("Failed to parse signature")))
+    }
+}
+
 impl From<TryFromIntError> for Error {
     fn from(_: TryFromIntError) -> Self {
         Error::InvalidData(Some("Value doesn't fit".to_string()))

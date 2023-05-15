@@ -16,5 +16,5 @@ fn main() -> Result<()> {
     let path = env::var("SSH_AUTH_SOCK").expect("SSH_AUTH_SOCK is not set");
     let mut client = Client::connect(Path::new(path.as_str()))?;
 
-    client.remove_identity(key)
+    client.remove_identity(&key)
 }

@@ -20,7 +20,8 @@
 //! ```
 
 use crate::codec::{read_message, write_message, ReadMessage, WriteMessage};
-use ssh_key::{PrivateKey, PublicKey};
+use bytes::Bytes;
+use ssh_key::{PrivateKey, PublicKey, Signature};
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -58,25 +59,21 @@ impl Client {
     /// Lists the identities that has been added to the connected ssh-agent.
     pub fn list_identities(&mut self) -> Result<Vec<PublicKey>> {
         write_message(&mut self.socket, WriteMessage::RequestIdentities)?;
-        let response = read_message(&mut self.socket)?;
-        match response {
+        match read_message(&mut self.socket)? {
             ReadMessage::Identities(identities) => Ok(identities),
             _ => Err(Error::UnknownMessageType),
         }
     }
 
     /// Adds an identity to the connected ssh-agent.
-    pub fn add_identity(&mut self, key: PrivateKey) -> Result<()> {
-        write_message(&mut self.socket, WriteMessage::AddIdentity(Box::new(key)))?;
+    pub fn add_identity(&mut self, key: &PrivateKey) -> Result<()> {
+        write_message(&mut self.socket, WriteMessage::AddIdentity(key))?;
         self.expect_success()
     }
 
     /// Removes an identity from the connected ssh-agent.
-    pub fn remove_identity(&mut self, key: PrivateKey) -> Result<()> {
-        write_message(
-            &mut self.socket,
-            WriteMessage::RemoveIdentity(Box::new(key)),
-        )?;
+    pub fn remove_identity(&mut self, key: &PrivateKey) -> Result<()> {
+        write_message(&mut self.socket, WriteMessage::RemoveIdentity(key))?;
         self.expect_success()
     }
 
@@ -84,6 +81,16 @@ impl Client {
     pub fn remove_all_identities(&mut self) -> Result<()> {
         write_message(&mut self.socket, WriteMessage::RemoveAllIdentities)?;
         self.expect_success()
+    }
+
+    /// Sign bytes with the given public_key
+    pub fn sign(&mut self, key: &PublicKey, data: Bytes) -> Result<Signature> {
+        write_message(&mut self.socket, WriteMessage::Sign(key, data))?;
+        match read_message(&mut self.socket)? {
+            ReadMessage::Signature(sig) => Ok(sig),
+            ReadMessage::Failure => Err(Error::RemoteFailure),
+            _ => Err(Error::UnknownMessageType),
+        }
     }
 
     fn expect_success(&mut self) -> Result<()> {
