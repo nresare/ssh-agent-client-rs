@@ -2,30 +2,33 @@ use crate::codec::ReadMessage::{Failure, Success};
 use crate::Error::UnknownMessageType;
 use crate::{Error, Result};
 use bytes::{Buf, Bytes, BytesMut};
-use ssh_encoding::Encode;
-use ssh_key::{PrivateKey, PublicKey};
+use ssh_encoding::{Decode, Encode};
+use ssh_key::{PrivateKey, PublicKey, Signature};
 use std::io::{Read, Write};
 
 type MessageTypeId = u8;
 // This list is copied from
 // https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent-04#section-5.1
 const SSH_AGENTC_REQUEST_IDENTITIES: MessageTypeId = 11;
+const SSH_AGENTC_SIGN_REQUEST: MessageTypeId = 13;
 const SSH_AGENTC_ADD_IDENTITY: MessageTypeId = 17;
 const SSH_AGENTC_REMOVE_IDENTITY: MessageTypeId = 18;
 const SSH_AGENTC_REMOVE_ALL_IDENTITIES: MessageTypeId = 19;
 
 const SSH_AGENT_FAILURE: MessageTypeId = 5;
 const SSH_AGENT_SUCCESS: MessageTypeId = 6;
+const SSH_AGENT_SIGN_RESPONSE: MessageTypeId = 14;
 const SSH_AGENT_IDENTITIES_ANSWER: MessageTypeId = 12;
 
 // to avoid allocating far too much memory
 const MAX_MESSAGE_SIZE: u32 = 1024 * 1024;
 
 //#[repr(u8)]
-pub enum WriteMessage {
+pub enum WriteMessage<'a> {
     RequestIdentities,
-    AddIdentity(Box<PrivateKey>),
-    RemoveIdentity(Box<PrivateKey>),
+    Sign(&'a PublicKey, Bytes),
+    AddIdentity(&'a PrivateKey),
+    RemoveIdentity(&'a PrivateKey),
     RemoveAllIdentities,
 }
 
@@ -33,6 +36,7 @@ pub enum ReadMessage {
     Failure,
     Success,
     Identities(Vec<PublicKey>),
+    Signature(Signature),
 }
 
 pub fn read_message(input: &mut dyn Read) -> Result<ReadMessage> {
@@ -41,6 +45,17 @@ pub fn read_message(input: &mut dyn Read) -> Result<ReadMessage> {
         SSH_AGENT_FAILURE => Ok(Failure),
         SSH_AGENT_SUCCESS => Ok(Success),
         SSH_AGENT_IDENTITIES_ANSWER => Ok(ReadMessage::Identities(make_identities(buf)?)),
+        SSH_AGENT_SIGN_RESPONSE => {
+            // Discard the first 4 bytes, as they just encode the length of the field
+            // todo: Verify that the length is correct
+            let mut buf = &buf[..];
+            let sig_len: usize = buf.get_u32() as usize;
+            if sig_len != buf.len() {
+                return invalid_data(String::from("different inner and outer size"));
+            }
+            let sig = Signature::decode(&mut buf)?;
+            Ok(ReadMessage::Signature(sig))
+        }
         _ => Err(UnknownMessageType),
     }
 }
@@ -63,7 +78,16 @@ pub fn write_message(output: &mut dyn Write, message: WriteMessage) -> Result<()
             key.public_key().key_data().encode(&mut buf)?;
         }
         WriteMessage::RemoveAllIdentities => buf.write_all(&[SSH_AGENTC_REMOVE_ALL_IDENTITIES])?,
+        WriteMessage::Sign(key, data) => {
+            buf.write_all(&[SSH_AGENTC_SIGN_REQUEST])?;
+            write_len(key.key_data().encoded_len()?, &mut buf)?;
+            key.key_data().encode(&mut buf)?;
+            write_len(data.len(), &mut buf)?;
+            buf.write_all(data.as_ref())?;
+            write_len(0, &mut buf)?;
+        }
     }
+
     write_len(buf.len(), output)?;
     output.write_all(&buf)?;
     Ok(())
@@ -79,7 +103,7 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
     input.read_exact(&mut buf)?;
     let mut buf = &buf[..];
     let len = buf.get_u32();
-    let t = buf.get_u8();
+    let message_type = buf.get_u8();
 
     if len > MAX_MESSAGE_SIZE {
         // refusing to allocate more than MAX_MESSAGE_SIZE
@@ -90,7 +114,7 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
     }
     let mut bytes: BytesMut = BytesMut::zeroed(len as usize - 1);
     input.read_exact(bytes.as_mut())?;
-    Ok((t, bytes.freeze()))
+    Ok((message_type, bytes.freeze()))
 }
 
 fn invalid_data<T>(message: String) -> Result<T> {
@@ -218,7 +242,7 @@ mod test {
             ));
             let mut output: Vec<u8> = Vec::new();
             let key = PrivateKey::from_openssh(key).expect("failed to parse key");
-            write_message(&mut output, WriteMessage::AddIdentity(Box::new(key))).unwrap();
+            write_message(&mut output, WriteMessage::AddIdentity(&key)).unwrap();
             assert_eq!(expected, output.as_slice());
         };
     }
@@ -245,7 +269,7 @@ mod test {
             ));
             let mut output: Vec<u8> = Vec::new();
             let key = PrivateKey::from_openssh(key).expect("failed to parse key");
-            write_message(&mut output, WriteMessage::RemoveIdentity(Box::new(key))).unwrap();
+            write_message(&mut output, WriteMessage::RemoveIdentity(&key)).unwrap();
             assert_eq!(expected, output.as_slice());
         };
     }

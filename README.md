@@ -20,17 +20,11 @@ In particular this client only exposes a synchronous API which simplifies both t
 The example code in examples should be pretty easy to follow.
 The basic idea is to create a `Client` instance and call its public methods to interact with the ssh-agent.
 
-## Future plans
-
-This project is in early development. This is a roughly ordered todo-list:
-
-* Implement the api to sign data using the agent
-
 ## License
 
 Licensed under either of
-* Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-* MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+* [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
+* [MIT license](http://opensource.org/licenses/MIT)
   at your option.
 
 ### Contribution

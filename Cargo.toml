@@ -10,5 +10,11 @@ edition = "2021"
 
 [dependencies]
 bytes = "1.4.0"
-ssh-key = "0.5.1"
+ssh-key = { version = "0.5.1", features = ["ed25519", "dsa", "ecdsa", "rsa"] }
 ssh-encoding = "0.1.0"
+hexdump = "0.1.1"
+# we need the signature that ssh-key uses
+signature = "1.6.4"
+
+[dev-dependencies]
+getrandom = "0.2.9"
