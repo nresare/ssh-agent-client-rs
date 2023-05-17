@@ -3,7 +3,7 @@ use crate::Error::UnknownMessageType;
 use crate::{Error, Result};
 use bytes::{Buf, Bytes, BytesMut};
 use ssh_encoding::{Decode, Encode};
-use ssh_key::{PrivateKey, PublicKey, Signature};
+use ssh_key::{Algorithm, PrivateKey, PublicKey, Signature};
 use std::io::{Read, Write};
 
 type MessageTypeId = u8;
@@ -19,6 +19,10 @@ const SSH_AGENT_FAILURE: MessageTypeId = 5;
 const SSH_AGENT_SUCCESS: MessageTypeId = 6;
 const SSH_AGENT_SIGN_RESPONSE: MessageTypeId = 14;
 const SSH_AGENT_IDENTITIES_ANSWER: MessageTypeId = 12;
+
+// This list is copied from
+// https://datatracker.ietf.org/doc/html/draft-miller-ssh-agent-04#section-7.3
+const SSH_AGENT_RSA_SHA2_512: usize = 0x04;
 
 // to avoid allocating far too much memory
 const MAX_MESSAGE_SIZE: u32 = 1024 * 1024;
@@ -47,7 +51,6 @@ pub fn read_message(input: &mut dyn Read) -> Result<ReadMessage> {
         SSH_AGENT_IDENTITIES_ANSWER => Ok(ReadMessage::Identities(make_identities(buf)?)),
         SSH_AGENT_SIGN_RESPONSE => {
             // Discard the first 4 bytes, as they just encode the length of the field
-            // todo: Verify that the length is correct
             let mut buf = &buf[..];
             let sig_len: usize = buf.get_u32() as usize;
             if sig_len != buf.len() {
@@ -84,7 +87,10 @@ pub fn write_message(output: &mut dyn Write, message: WriteMessage) -> Result<()
             key.key_data().encode(&mut buf)?;
             write_len(data.len(), &mut buf)?;
             buf.write_all(data.as_ref())?;
-            write_len(0, &mut buf)?;
+            match key.algorithm() {
+                Algorithm::Rsa { hash: _ } => write_len(SSH_AGENT_RSA_SHA2_512, &mut buf)?,
+                _ => write_len(0, &mut buf)?,
+            }
         }
     }
 

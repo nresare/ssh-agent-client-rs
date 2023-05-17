@@ -83,7 +83,8 @@ impl Client {
         self.expect_success()
     }
 
-    /// Sign bytes with the given public_key
+    /// Sign bytes with the given public_key. For now, sign requests with RSA
+    /// keys are hard coded to use the SHA-512 hash algorithm.
     pub fn sign(&mut self, key: &PublicKey, data: Bytes) -> Result<Signature> {
         write_message(&mut self.socket, WriteMessage::Sign(key, data))?;
         match read_message(&mut self.socket)? {
