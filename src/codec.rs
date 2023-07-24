@@ -30,7 +30,7 @@ const MAX_MESSAGE_SIZE: u32 = 1024 * 1024;
 //#[repr(u8)]
 pub enum WriteMessage<'a> {
     RequestIdentities,
-    Sign(&'a PublicKey, Bytes),
+    Sign(&'a PublicKey, &'a [u8]),
     AddIdentity(&'a PrivateKey),
     RemoveIdentity(&'a PrivateKey),
     RemoveAllIdentities,
@@ -86,7 +86,7 @@ pub fn write_message(output: &mut dyn Write, message: WriteMessage) -> Result<()
             write_len(key.key_data().encoded_len()?, &mut buf)?;
             key.key_data().encode(&mut buf)?;
             write_len(data.len(), &mut buf)?;
-            buf.write_all(data.as_ref())?;
+            buf.write_all(data)?;
             match key.algorithm() {
                 Algorithm::Rsa { hash: _ } => write_len(SSH_AGENT_RSA_SHA2_512, &mut buf)?,
                 _ => write_len(0, &mut buf)?,
