@@ -20,7 +20,6 @@
 //! ```
 
 use crate::codec::{read_message, write_message, ReadMessage, WriteMessage};
-use bytes::Bytes;
 use ssh_key::{PrivateKey, PublicKey, Signature};
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
@@ -85,7 +84,7 @@ impl Client {
 
     /// Sign bytes with the given public_key. For now, sign requests with RSA
     /// keys are hard coded to use the SHA-512 hash algorithm.
-    pub fn sign(&mut self, key: &PublicKey, data: Bytes) -> Result<Signature> {
+    pub fn sign(&mut self, key: &PublicKey, data: &[u8]) -> Result<Signature> {
         write_message(&mut self.socket, WriteMessage::Sign(key, data))?;
         match read_message(&mut self.socket)? {
             ReadMessage::Signature(sig) => Ok(sig),

@@ -24,7 +24,7 @@ fn main() -> Result<()> {
     getrandom(&mut data[..]).expect("Failed to obtain random data to sign");
     let data = data.freeze();
 
-    let sig = client.sign(&key, data.clone())?;
+    let sig = client.sign(&key, data.as_ref())?;
 
     key.key_data()
         .verify(data.as_ref(), &sig)
