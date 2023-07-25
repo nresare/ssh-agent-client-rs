@@ -1,5 +1,5 @@
 use signature::Signer;
-use ssh_agent_client_rs::Client;
+use ssh_agent_client_rs::{Client, Error};
 use ssh_key::{PrivateKey, PublicKey};
 
 mod mock;
@@ -34,4 +34,32 @@ fn test_sign() {
     let result = client.sign(&public_key, TEST_DATA).unwrap();
 
     assert_eq!(private_key.key_data().sign(TEST_DATA.as_ref()), result);
+}
+
+#[test]
+fn test_sign_remote_failure() {
+    let socket = MockSocket::new(
+        include_bytes!("data/sign_request.bin"),
+        include_bytes!("data/failure_response.bin"),
+    );
+
+    let public_key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
+
+    let mut client = Client::with_read_write(Box::new(socket));
+    let result = client.sign(&public_key, TEST_DATA).unwrap_err();
+    assert!(matches!(result, Error::RemoteFailure));
+}
+
+#[test]
+fn test_sign_invalid_response() {
+    let socket = MockSocket::new(
+        include_bytes!("data/sign_request.bin"),
+        include_bytes!("data/sign_request.bin"),
+    );
+
+    let public_key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
+
+    let mut client = Client::with_read_write(Box::new(socket));
+    let result = client.sign(&public_key, TEST_DATA).unwrap_err();
+    assert!(matches!(result, Error::UnknownMessageType));
 }
