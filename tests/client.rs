@@ -27,10 +27,14 @@ fn test_sign() {
         include_bytes!("data/sign_response.bin"),
     );
 
-    let public_key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
+    let mut public_key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
+    // let's verify that changing the comment doesn't affect the request sent
+    public_key.set_comment("another comment");
+
     let private_key = PrivateKey::from_openssh(include_str!("data/id_ed25519")).unwrap();
 
     let mut client = Client::with_read_write(Box::new(socket));
+
     let result = client.sign(&public_key, TEST_DATA).unwrap();
 
     assert_eq!(private_key.key_data().sign(TEST_DATA.as_ref()), result);
