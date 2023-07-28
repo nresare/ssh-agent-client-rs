@@ -60,7 +60,7 @@ impl Client {
         write_message(&mut self.socket, WriteMessage::RequestIdentities)?;
         match read_message(&mut self.socket)? {
             ReadMessage::Identities(identities) => Ok(identities),
-            _ => Err(Error::UnknownMessageType),
+            m => Err(unexpected_response(m)),
         }
     }
 
@@ -89,7 +89,7 @@ impl Client {
         match read_message(&mut self.socket)? {
             ReadMessage::Signature(sig) => Ok(sig),
             ReadMessage::Failure => Err(Error::RemoteFailure),
-            _ => Err(Error::UnknownMessageType),
+            m => Err(unexpected_response(m)),
         }
     }
 
@@ -98,7 +98,12 @@ impl Client {
         match response {
             ReadMessage::Success => Ok(()),
             ReadMessage::Failure => Err(Error::RemoteFailure),
-            _ => Err(Error::InvalidData(Some("Unexpected response".to_string()))),
+            _ => Err(Error::InvalidMessage("Unexpected response".to_string())),
         }
     }
+}
+
+fn unexpected_response(message: ReadMessage) -> Error {
+    let error = format!("Agent responded with unexpected message '{:?}'", message);
+    Error::InvalidMessage(error)
 }

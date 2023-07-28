@@ -1,6 +1,6 @@
 [package]
 name = "ssh-agent-client-rs"
-version = "0.4.0"
+version = "0.5.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/nresare/ssh-agent-client-rs"
 description = """
@@ -14,6 +14,7 @@ ssh-key = { version = "0.5.1", features = ["rsa", "dsa", "ed25519", "ecdsa", "p2
 ssh-encoding = "0.1.0"
 # we need the signature that ssh-key uses
 signature = "1.6.4"
+thiserror = "1.0.44"
 
 [dev-dependencies]
 getrandom = "0.2.9"

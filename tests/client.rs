@@ -65,5 +65,8 @@ fn test_sign_invalid_response() {
 
     let mut client = Client::with_read_write(Box::new(socket));
     let result = client.sign(&public_key, TEST_DATA).unwrap_err();
-    assert!(matches!(result, Error::UnknownMessageType));
+    match result {
+        Error::UnknownMessageType(_) => {}
+        result => panic!("{}", result),
+    }
 }

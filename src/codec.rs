@@ -36,6 +36,7 @@ pub enum WriteMessage<'a> {
     RemoveAllIdentities,
 }
 
+#[derive(Debug)]
 pub enum ReadMessage {
     Failure,
     Success,
@@ -59,7 +60,7 @@ pub fn read_message(input: &mut dyn Read) -> Result<ReadMessage> {
             let sig = Signature::decode(&mut buf)?;
             Ok(ReadMessage::Signature(sig))
         }
-        _ => Err(UnknownMessageType),
+        _ => Err(UnknownMessageType(t)),
     }
 }
 
@@ -100,7 +101,13 @@ pub fn write_message(output: &mut dyn Write, message: WriteMessage) -> Result<()
 }
 
 fn write_len(len: usize, output: &mut dyn Write) -> Result<()> {
-    output.write_all(&u32::try_from(len)?.to_be_bytes())?;
+    output.write_all(
+        &u32::try_from(len)
+            .map_err(|_| {
+                Error::InvalidMessage(format!("Could not encode {} into an u32 value", len))
+            })?
+            .to_be_bytes(),
+    )?;
     Ok(())
 }
 
@@ -124,7 +131,7 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
 }
 
 fn invalid_data<T>(message: String) -> Result<T> {
-    Err(Error::InvalidData(Some(message)))
+    Err(Error::InvalidMessage(message))
 }
 
 fn make_identities(mut buf: Bytes) -> Result<Vec<PublicKey>> {
@@ -195,7 +202,7 @@ mod test {
     fn test_read_message_unknown() {
         let result = read_message(&mut reader(b"\0\0\0\x01\xff"));
         match result {
-            Err(Error::UnknownMessageType) => (),
+            Err(Error::UnknownMessageType(_)) => (),
             _ => panic!("did not receive expected error UnknownMessageType"),
         }
     }
@@ -204,7 +211,7 @@ mod test {
     fn test_read_overly_long_message_length() {
         let result = read_message(&mut reader(b"\x01\0\0\x01\xff"));
         match result {
-            Err(Error::InvalidData(Some(msg))) => assert_eq!(
+            Err(Error::InvalidMessage(msg)) => assert_eq!(
                 msg,
                 "Refusing to read message with size larger than 1048576"
             ),
