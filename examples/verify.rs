@@ -1,7 +1,7 @@
 use bytes::BytesMut;
 use getrandom::getrandom;
 use signature::Verifier;
-use ssh_agent_client_rs::{Client, Error, Result};
+use ssh_agent_client_rs::{Client, Result};
 use ssh_key::PublicKey;
 use std::env;
 use std::fs::read_to_string;
@@ -13,8 +13,7 @@ use std::path::Path;
 /// `ssh-add -K PUBLIC_KEY`
 fn main() -> Result<()> {
     let path = env::args().nth(1).expect("argument PUBLIC_KEY missing");
-    let key_bytes = read_to_string(Path::new(&path))
-        .map_err(|e| Error::IO(Some(format!("Failed to read from {}", path)), e))?;
+    let key_bytes = read_to_string(Path::new(&path))?;
     let key = PublicKey::from_openssh(key_bytes.as_str())?;
 
     let path = env::var("SSH_AUTH_SOCK").expect("SSH_AUTH_SOCK is not set");
