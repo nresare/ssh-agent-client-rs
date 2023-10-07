@@ -20,6 +20,8 @@ pub enum Error {
     /// An operation returned a ssh_key::Error wrapped in this variant.
     #[error("An ssh key operation failed")]
     SSHKey(#[from] ssh_key::Error),
+    #[error("An ssh encoding operation failed")]
+    SSHEncoding(#[from] ssh_encoding::Error),
     #[error("The remote ssh agent returned the failure message")]
     /// An operation returned the Failure message from the remote ssh-agent.
     RemoteFailure,

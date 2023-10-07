@@ -9,12 +9,11 @@ Pure rust implementation of the ssh-agent protocol. It can be used to write clie
 edition = "2021"
 
 [dependencies]
-bytes = "1.4.0"
-ssh-key = { version = "0.5.1", features = ["rsa", "dsa", "ed25519", "ecdsa", "p256", "p384"] }
-ssh-encoding = "0.1.0"
-# we need the signature that ssh-key uses
-signature = "1.6.4"
-thiserror = "1.0.44"
+bytes = "1.5.0"
+ssh-key = { version = "0.6.1", features = ["crypto"] }
+ssh-encoding = "0.2.0"
+signature = "2.1.0"
+thiserror = "1.0.49"
 
 [dev-dependencies]
-getrandom = "0.2.9"
+getrandom = "0.2.10"
