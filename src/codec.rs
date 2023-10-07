@@ -55,7 +55,7 @@ pub fn read_message(input: &mut dyn Read) -> Result<ReadMessage> {
             let mut buf = &buf[..];
             let sig_len: usize = buf.get_u32() as usize;
             if sig_len != buf.len() {
-                return invalid_data(String::from("different inner and outer size"));
+                return invalid_data("different inner and outer size");
             }
             let sig = Signature::decode(&mut buf)?;
             Ok(ReadMessage::Signature(sig))
@@ -73,41 +73,39 @@ pub fn write_message(output: &mut dyn Write, message: WriteMessage) -> Result<()
             key.key_data().encode(&mut buf)?;
 
             let comment = key.comment();
-            write_len(comment.len(), &mut buf)?;
+            write_u32(comment.len(), &mut buf)?;
             buf.write_all(comment.as_ref())?
         }
         WriteMessage::RemoveIdentity(key) => {
             buf.write_all(&[SSH_AGENTC_REMOVE_IDENTITY])?;
-            write_len(key.public_key().key_data().encoded_len()?, &mut buf)?;
+            write_u32(key.public_key().key_data().encoded_len()?, &mut buf)?;
             key.public_key().key_data().encode(&mut buf)?;
         }
         WriteMessage::RemoveAllIdentities => buf.write_all(&[SSH_AGENTC_REMOVE_ALL_IDENTITIES])?,
         WriteMessage::Sign(key, data) => {
             buf.write_all(&[SSH_AGENTC_SIGN_REQUEST])?;
-            write_len(key.key_data().encoded_len()?, &mut buf)?;
+            write_u32(key.key_data().encoded_len()?, &mut buf)?;
             key.key_data().encode(&mut buf)?;
-            write_len(data.len(), &mut buf)?;
+            write_u32(data.len(), &mut buf)?;
             buf.write_all(data)?;
+            // Emit signature flags, see the spec section 4.5.1
             match key.algorithm() {
-                Algorithm::Rsa { hash: _ } => write_len(SSH_AGENT_RSA_SHA2_512, &mut buf)?,
-                _ => write_len(0, &mut buf)?,
+                // Let's always use the SHA2 512 bit hash when signing RSA keys, to simplify the API
+                Algorithm::Rsa { hash: _ } => write_u32(SSH_AGENT_RSA_SHA2_512, &mut buf)?,
+                _ => write_u32(0, &mut buf)?,
             }
         }
     }
 
-    write_len(buf.len(), output)?;
+    write_u32(buf.len(), output)?;
     output.write_all(&buf)?;
     Ok(())
 }
 
-fn write_len(len: usize, output: &mut dyn Write) -> Result<()> {
-    output.write_all(
-        &u32::try_from(len)
-            .map_err(|_| {
-                Error::InvalidMessage(format!("Could not encode {} into an u32 value", len))
-            })?
-            .to_be_bytes(),
-    )?;
+fn write_u32(i: usize, output: &mut dyn Write) -> Result<()> {
+    let i = u32::try_from(i)
+        .map_err(|_| Error::InvalidMessage(format!("Could not encode {} into an u32 value", i)))?;
+    output.write_all(&i.to_be_bytes())?;
     Ok(())
 }
 
@@ -120,7 +118,7 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
 
     if len > MAX_MESSAGE_SIZE {
         // refusing to allocate more than MAX_MESSAGE_SIZE
-        return invalid_data(format!(
+        return invalid_data(&format!(
             "Refusing to read message with size larger than {}",
             MAX_MESSAGE_SIZE
         ));
@@ -130,8 +128,8 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
     Ok((message_type, bytes.freeze()))
 }
 
-fn invalid_data<T>(message: String) -> Result<T> {
-    Err(Error::InvalidMessage(message))
+fn invalid_data<T>(message: &str) -> Result<T> {
+    Err(Error::InvalidMessage(String::from(message)))
 }
 
 fn make_identities(mut buf: Bytes) -> Result<Vec<PublicKey>> {
@@ -156,7 +154,9 @@ fn make_identities(mut buf: Bytes) -> Result<Vec<PublicKey>> {
 
 #[cfg(test)]
 mod test {
-    use crate::codec::{make_identities, read_message, write_message, ReadMessage, WriteMessage};
+    use crate::codec::{
+        make_identities, read_message, write_message, write_u32, ReadMessage, WriteMessage,
+    };
     use crate::Error;
     use bytes::Bytes;
     use ssh_key::{PrivateKey, PublicKey};
@@ -300,5 +300,39 @@ mod test {
         let mut output: Vec<u8> = Vec::new();
         write_message(&mut output, WriteMessage::RemoveAllIdentities).expect("failed writing");
         assert_eq!(vec![0_u8, 0, 0, 1, 19], output)
+    }
+
+    #[test]
+    fn test_write_too_large() {
+        let mut output: Vec<u8> = Vec::new();
+        let result = write_u32(usize::MAX, &mut output);
+        match result {
+            Err(Error::InvalidMessage(msg)) => {
+                assert_eq!(
+                    format!("Could not encode {} into an u32 value", usize::MAX),
+                    msg
+                )
+            }
+            _ => panic!("expected InvalidMessage"),
+        }
+    }
+
+    // let's verify that we set the correct signature flag, SSH_AGENT_RSA_SHA2_512
+    #[test]
+    fn test_write_sign_rsa() {
+        let key = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/id_rsa.pub",
+        ));
+        let expected = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/sign_rsa.bin",
+        ));
+
+        let key = PublicKey::from_openssh(key).expect("failed to parse key");
+
+        let mut output: Vec<u8> = Vec::new();
+        write_message(&mut output, WriteMessage::Sign(&key, b"a")).unwrap();
+        assert_eq!(expected, output.as_slice());
     }
 }
