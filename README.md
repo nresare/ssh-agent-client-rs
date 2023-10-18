@@ -15,6 +15,22 @@ protocol. However, contributions are more than welcome.
 It was inspired by [russh-agent](https://crates.io/crates/russh-agent) but the projects does not share any code.
 In particular this client only exposes a synchronous API which simplifies both the implementation and interface.
 
+## Implemented and tested features
+
+This client implements the most of the features described in the protocol specification, including the ability
+to instruct an ssh-agent to
+* add identities, the term the specification uses for a key pair, given a private key
+* list identities
+* remove an identity given a specific public key
+* remove all identities
+* sign an arbitrary message
+
+The following features have not yet been implemented
+* adding identities with constraints
+* the dedicated message to add smartcard keys using the `SSH_AGENTC_ADD_SMARTCARD_KEY` message. 
+  However, in practice at least `resident` type smartcard keys from a device implementing `FIDO2`
+  such as Yubikey series 5 is added using the regular message to add an identity, `SSH_AGENTC_ADD_IDENTITY`
+
 ## Usage
 
 The example code in examples should be pretty easy to follow.
