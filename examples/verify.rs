@@ -16,17 +16,20 @@ fn main() -> Result<()> {
     let key_bytes = read_to_string(Path::new(&path))?;
     let key = PublicKey::from_openssh(key_bytes.as_str())?;
 
-    let path = env::var("SSH_AUTH_SOCK").expect("SSH_AUTH_SOCK is not set");
-    let mut client = Client::connect(Path::new(path.as_str()))?;
+    let agent_path = env::var("SSH_AUTH_SOCK").expect("SSH_AUTH_SOCK is not set");
+    let mut client = Client::connect(Path::new(agent_path.as_str()))?;
 
     let mut data = BytesMut::zeroed(32);
     getrandom(&mut data[..]).expect("Failed to obtain random data to sign");
     let data = data.freeze();
 
-    let sig = client.sign(&key, data.as_ref())?;
-
+    let sig = client.sign(&key, &data)?;
     key.key_data()
         .verify(data.as_ref(), &sig)
         .expect("verification failed");
+    println!(
+        "Successfully verified a signature from the agent '{}' with the public key in '{}'",
+        agent_path, path,
+    );
     Ok(())
 }
