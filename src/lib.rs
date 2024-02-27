@@ -1,7 +1,7 @@
 //! # ssh-agent-client-rs
 //!
 //! An ssh-agent client implementation in rust, aiming to provide a robust,
-//! well tested and easy to use API to interact with an ssh-agent.
+//! well tested and easy to use synchronous API to interact with an ssh-agent.
 //!
 //! # Examples
 //! ```no_run
@@ -34,7 +34,7 @@ pub use self::error::Result;
 /// A combination of the std::io::Read and std::io::Write traits.
 pub trait ReadWrite: Read + Write {}
 
-/// A Client instance is an object that can be used to interact with a ssh-agent,
+/// A Client instance is an object that can be used to interact with an ssh-agent,
 /// typically using a Unix socket
 pub struct Client {
     socket: Box<dyn ReadWrite>,
@@ -43,19 +43,19 @@ pub struct Client {
 impl ReadWrite for UnixStream {}
 
 impl Client {
-    /// Constructs a Client connected to a unix socket referenced by the path socket.
+    /// Constructs a Client connected to a unix socket referenced by path.
     pub fn connect(path: &Path) -> Result<Client> {
         let socket = Box::new(UnixStream::connect(path)?);
         Ok(Client { socket })
     }
 
-    /// Constructs a Client backed by an implementation of ReadWrite, mainly useful for
+    /// Construct a Client backed by an implementation of ReadWrite, mainly useful for
     /// testing.
     pub fn with_read_write(read_write: Box<dyn ReadWrite>) -> Client {
         Client { socket: read_write }
     }
 
-    /// Lists the identities that has been added to the connected ssh-agent.
+    /// List the identities that has been added to the connected ssh-agent.
     pub fn list_identities(&mut self) -> Result<Vec<PublicKey>> {
         write_message(&mut self.socket, WriteMessage::RequestIdentities)?;
         match read_message(&mut self.socket)? {
@@ -64,26 +64,27 @@ impl Client {
         }
     }
 
-    /// Adds an identity to the connected ssh-agent.
+    /// Add an identity to the connected ssh-agent.
     pub fn add_identity(&mut self, key: &PrivateKey) -> Result<()> {
         write_message(&mut self.socket, WriteMessage::AddIdentity(key))?;
         self.expect_success()
     }
 
-    /// Removes an identity from the connected ssh-agent.
+    /// Remove an identity from the connected ssh-agent.
     pub fn remove_identity(&mut self, key: &PrivateKey) -> Result<()> {
         write_message(&mut self.socket, WriteMessage::RemoveIdentity(key))?;
         self.expect_success()
     }
 
-    /// Removes all identities from the connected ssh-agent.
+    /// Remove all identities from the connected ssh-agent.
     pub fn remove_all_identities(&mut self) -> Result<()> {
         write_message(&mut self.socket, WriteMessage::RemoveAllIdentities)?;
         self.expect_success()
     }
 
-    /// Sign bytes with the given public_key. For now, sign requests with RSA
-    /// keys are hard coded to use the SHA-512 hash algorithm.
+    /// Instruct the connected ssh-agent to sign data with the private key associated with the
+    /// provided public key. For now, sign requests with RSA keys are hard coded to use the
+    /// SHA-512 hashing algorithm.
     pub fn sign(&mut self, key: &PublicKey, data: &[u8]) -> Result<Signature> {
         write_message(&mut self.socket, WriteMessage::Sign(key, data))?;
         match read_message(&mut self.socket)? {
