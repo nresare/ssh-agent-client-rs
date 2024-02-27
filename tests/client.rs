@@ -1,5 +1,7 @@
 use signature::Signer;
 use ssh_agent_client_rs::{Client, Error};
+use ssh_encoding::Decode;
+use ssh_key::Signature;
 use ssh_key::{PrivateKey, PublicKey};
 
 mod mock;
@@ -69,4 +71,10 @@ fn test_sign_invalid_response() {
         Error::UnknownMessageType(_) => {}
         result => panic!("{}", result),
     }
+}
+
+#[test]
+fn test_sk_ecdsa_sha2_signature() {
+    let bytes = include_bytes!("data/sk_ecdsa_signature.bin");
+    Signature::decode(&mut bytes.as_ref()).unwrap();
 }
