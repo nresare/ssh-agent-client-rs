@@ -14,6 +14,9 @@ pub enum Error {
     /// There was a failure parsing the message
     #[error("An invalid message was received: {0}")]
     InvalidMessage(String),
+    /// There was a failure connecting to git-bash ssh-agent
+    #[error("Connection to git-bash ssh-agent error: {0}")]
+    GitBashErrorMessage(String),
     /// There was an io::Error communicating with the agent
     #[error("An error occurred communicating with the agent")]
     AgentCommunicationError(#[from] std::io::Error),

@@ -1,0 +1,33 @@
+name: Rust_win_git_bash
+
+on:
+  push:
+    branches: [ "win_git_bash" ]
+  pull_request:
+    branches: [ "win_git_bash" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    - uses: actions/checkout@v4
+    - name: Build
+      run: cargo build --verbose --target x86_64-pc-windows-gnu
+    - name: Run tests
+      run: cargo test --verbose --target x86_64-pc-windows-gnu
+    - name: Format check
+      run: cargo fmt --check
+    - name: Clippy check
+      run: cargo clippy --no-deps --target x86_64-pc-windows-gnu
