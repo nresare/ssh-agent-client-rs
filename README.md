@@ -36,9 +36,22 @@ The following features have not yet been implemented
 The example code in examples should be pretty easy to follow.
 The basic idea is to create a `Client` instance and call its public methods to interact with the ssh-agent.
 
+## Windows git-bash
+
+The implementation of ssh-agent in git-bash works over Tcp socket and is supported by this client.  
+The rust target is x86_64-pc-windows-gnu and can be cross-compiled from Linux to Windows.  
+Windows git-bash environment has also other names: cygwin, msys2, mingW64, git-for-windows, ...  
+
+Windows has other not compatible ssh-agent implementations that are NOT supported by this client.  
+
+* Microsoft ssh works over named pipes.
+* After 2019 Microsoft introduced Unix Sockets.
+* Old and obsolete msys or msysGit
+
 ## License
 
 Licensed under either of
+
 * [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
 * [MIT license](http://opensource.org/licenses/MIT)
   at your option.

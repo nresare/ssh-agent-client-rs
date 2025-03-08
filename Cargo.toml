@@ -14,6 +14,8 @@ ssh-key = { version = "0.6.4", features = ["crypto"] }
 ssh-encoding = "0.2.0"
 signature = "2.2.0"
 thiserror = "1.0.57"
+regex="1.11.1"
+sscanf = "0.4.2"
 
 [dev-dependencies]
 getrandom = "0.2.12"
