@@ -9,11 +9,11 @@ Pure rust implementation of the ssh-agent protocol. It can be used to write clie
 edition = "2021"
 
 [dependencies]
-bytes = "1.5.0"
-ssh-key = { version = "0.6.4", features = ["crypto"] }
+bytes = "1.10.0"
+ssh-key = { version = "0.6.7", features = ["crypto"] }
 ssh-encoding = "0.2.0"
 signature = "2.2.0"
-thiserror = "1.0.57"
+thiserror = "2.0.12"
 
 [dev-dependencies]
 rand = "0.9.0"
