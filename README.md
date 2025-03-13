@@ -36,6 +36,16 @@ The following features have not yet been implemented
 The example code in examples should be pretty easy to follow.
 The basic idea is to create a `Client` instance and call its public methods to interact with the ssh-agent.
 
+## Windows support
+
+Support for the communicating with the `openssh-ssh-agent` shipped with Windows 11 is implemented using 
+named pipes and the `interprocess` crate. To try the various example binaries, first set the `SSH_AUTH_SOCK`
+variable as follows:
+```cmd
+> set SSH_AUTH_SOCK=\\.\pipe\openssh-ssh-agent
+> cargo run --example list
+```
+
 ## License
 
 Licensed under either of
