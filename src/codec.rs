@@ -162,8 +162,8 @@ mod test {
     use ssh_key::{PrivateKey, PublicKey};
     use std::io::Cursor;
 
-    pub fn reader(data: &'static [u8]) -> Cursor<&[u8]> {
-        Cursor::new(&data[..])
+    pub fn reader(data: &'static [u8]) -> Cursor<&'static [u8]> {
+        Cursor::new(data)
     }
 
     #[test]
