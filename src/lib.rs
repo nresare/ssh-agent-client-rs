@@ -20,8 +20,11 @@
 //! ```
 
 use crate::codec::{read_message, write_message, ReadMessage, WriteMessage};
+#[cfg(target_family = "windows")]
+use interprocess::os::windows::named_pipe::{pipe_mode, DuplexPipeStream};
 use ssh_key::{PrivateKey, PublicKey, Signature};
 use std::io::{Read, Write};
+#[cfg(target_family = "unix")]
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 
@@ -40,13 +43,28 @@ pub struct Client {
     socket: Box<dyn ReadWrite>,
 }
 
+#[cfg(target_family = "unix")]
 impl ReadWrite for UnixStream {}
+
+#[cfg(target_family = "windows")]
+impl ReadWrite for DuplexPipeStream<pipe_mode::Bytes> {}
 
 impl Client {
     /// Constructs a Client connected to a unix socket referenced by path.
+    #[cfg(target_family = "unix")]
     pub fn connect(path: &Path) -> Result<Client> {
         let socket = Box::new(UnixStream::connect(path)?);
         Ok(Client { socket })
+    }
+
+    // If you want to communicate with the ssh-agent shipped with windows you probably want to pass
+    // Path::new(r"\\.\pipe\openssh-ssh-agent")
+    #[cfg(target_family = "windows")]
+    pub fn connect(path: &Path) -> Result<Client> {
+        let pipe = DuplexPipeStream::<pipe_mode::Bytes>::connect_by_path(path)?;
+        Ok(Client {
+            socket: Box::new(pipe),
+        })
     }
 
     /// Construct a Client backed by an implementation of ReadWrite, mainly useful for
