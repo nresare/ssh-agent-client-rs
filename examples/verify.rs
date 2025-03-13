@@ -1,5 +1,5 @@
 use bytes::BytesMut;
-use getrandom::getrandom;
+use rand::{rng, RngCore};
 use signature::Verifier;
 use ssh_agent_client_rs::{Client, Result};
 use ssh_key::PublicKey;
@@ -20,7 +20,7 @@ fn main() -> Result<()> {
     let mut client = Client::connect(Path::new(agent_path.as_str()))?;
 
     let mut data = BytesMut::zeroed(32);
-    getrandom(&mut data[..]).expect("Failed to obtain random data to sign");
+    rng().fill_bytes(&mut data);
     let data = data.freeze();
 
     let sig = client.sign(&key, &data)?;
