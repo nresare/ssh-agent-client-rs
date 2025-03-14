@@ -45,9 +45,6 @@ pub struct Client {
 
 impl<T> ReadWrite for T where T: Read + Write {}
 
-#[cfg(target_family = "windows")]
-impl ReadWrite for DuplexPipeStream<pipe_mode::Bytes> {}
-
 impl Client {
     /// Constructs a Client connected to a unix socket referenced by path.
     #[cfg(target_family = "unix")]
