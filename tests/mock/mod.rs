@@ -1,4 +1,3 @@
-use ssh_agent_client_rs::ReadWrite;
 use std::io::{Cursor, Read, Write};
 
 pub struct MockSocket<'a> {
@@ -28,8 +27,6 @@ impl Drop for MockSocket<'_> {
         assert_eq!(self.expected, self.output.as_slice())
     }
 }
-
-impl ReadWrite for MockSocket<'_> {}
 
 impl<'a> MockSocket<'a> {
     pub fn new(expected: &'a [u8], response: &'a [u8]) -> MockSocket<'a> {

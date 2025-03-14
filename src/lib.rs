@@ -43,8 +43,7 @@ pub struct Client {
     socket: Box<dyn ReadWrite>,
 }
 
-#[cfg(target_family = "unix")]
-impl ReadWrite for UnixStream {}
+impl<T> ReadWrite for T where T: Read + Write {}
 
 #[cfg(target_family = "windows")]
 impl ReadWrite for DuplexPipeStream<pipe_mode::Bytes> {}
