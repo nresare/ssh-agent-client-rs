@@ -38,13 +38,16 @@ The basic idea is to create a `Client` instance and call its public methods to i
 
 ## Windows support
 
-Support for the communicating with the `openssh-ssh-agent` shipped with Windows 11 is implemented using 
+Support for communicating with the `openssh-ssh-agent` shipped with Windows 11 is implemented using
 named pipes and the `interprocess` crate. To try the various example binaries, first set the `SSH_AUTH_SOCK`
 variable as follows:
 ```cmd
 > set SSH_AUTH_SOCK=\\.\pipe\openssh-ssh-agent
 > cargo run --example list
 ```
+
+If you are using the ssh-agent shipped with [git for windows](https://gitforwindows.org/) you might need to
+use the Unix socket emulation implementation available from https://github.com/bestia-dev/ssh-agent-client-rs-win-git-bash
 
 ## License
 
