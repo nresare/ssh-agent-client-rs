@@ -47,7 +47,7 @@ variable as follows:
 ```
 
 If you are using the ssh-agent shipped with [git for windows](https://gitforwindows.org/) you might need to
-use the Unix socket emulation implementation available from https://github.com/bestia-dev/ssh-agent-client-rs-win-git-bash
+use the Unix socket emulation implementation available from https://github.com/bestia-dev/ssh_agent_client_rs_git_bash
 
 ## License
 
