@@ -25,7 +25,7 @@ const SSH_AGENT_IDENTITIES_ANSWER: MessageTypeId = 12;
 const SSH_AGENT_RSA_SHA2_512: usize = 0x04;
 
 // to avoid allocating far too much memory
-const MAX_MESSAGE_SIZE: u32 = 1024 * 1024;
+const MAX_MESSAGE_SIZE: usize = 1024 * 1024;
 
 //#[repr(u8)]
 pub enum WriteMessage<'a> {
@@ -53,8 +53,7 @@ pub fn read_message(input: &mut dyn Read) -> Result<ReadMessage> {
         SSH_AGENT_SIGN_RESPONSE => {
             // Discard the first 4 bytes, as they just encode the length of the field
             let mut buf = &buf[..];
-            let sig_len: usize = buf.get_u32() as usize;
-            if sig_len != buf.len() {
+            if buf.get_length()? != buf.len() {
                 return invalid_data("different inner and outer size");
             }
             let sig = Signature::decode(&mut buf)?;
@@ -113,7 +112,7 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
     let mut buf = [0u8; 5];
     input.read_exact(&mut buf)?;
     let mut buf = &buf[..];
-    let len = buf.get_u32();
+    let len = buf.get_length()?;
     let message_type = buf.get_u8();
 
     if len > MAX_MESSAGE_SIZE {
@@ -123,7 +122,7 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
             MAX_MESSAGE_SIZE
         ));
     }
-    let mut bytes: BytesMut = BytesMut::zeroed(len as usize - 1);
+    let mut bytes: BytesMut = BytesMut::zeroed(len - 1);
     input.read_exact(bytes.as_mut())?;
     Ok((message_type, bytes.freeze()))
 }
@@ -133,15 +132,21 @@ fn invalid_data<T>(message: &str) -> Result<T> {
 }
 
 fn make_identities(mut buf: Bytes) -> Result<Vec<PublicKey>> {
-    let len = buf.get_u32() as usize;
+    let len = buf.get_length()?;
 
     let mut result = Vec::with_capacity(len);
     for _ in 0..len {
-        let key_len = buf.get_u32() as usize;
+        let key_len = buf.get_length()?;
+        let key_bytes = &buf.chunk()[..key_len];
+        // for now, we are just ignoring certificate key types as defined by having a key_type
+        // that contains "-cert-".
+        if get_key_type(key_bytes)?.contains("-cert-") {
+            continue;
+        }
+
         let mut public_key = PublicKey::from_bytes(&buf.chunk()[..key_len])?;
         buf.advance(key_len);
-
-        let comment_len = buf.get_u32() as usize;
+        let comment_len = buf.get_length()?;
         let comment = &buf.chunk()[..comment_len];
         let comment = std::str::from_utf8(comment).unwrap().to_string();
         buf.advance(comment_len);
@@ -151,6 +156,38 @@ fn make_identities(mut buf: Bytes) -> Result<Vec<PublicKey>> {
     }
     Ok(result)
 }
+
+fn get_key_type(bytes: &[u8]) -> Result<String> {
+    let mut buf = bytes;
+    let len = buf.get_length()?;
+    if buf.len() < len {
+        return invalid_data("buffer too short");
+    }
+    String::from_utf8(buf[..len].to_vec())
+        .map_err(|e| Error::InvalidMessage(format!("Invalid key type: {:?}", e)))
+}
+
+// There are a few instances where we read an u32 from a buffer or slice and want the value as
+// an usize. Let's have a single fallible implementation.
+trait GetLength {
+    fn get_length(&mut self) -> Result<usize>;
+}
+
+macro_rules! get_length {
+    ($t:ty) => {
+        impl GetLength for $t {
+            fn get_length(&mut self) -> Result<usize> {
+                if self.len() < 4 {
+                    return invalid_data("Length is too short");
+                }
+                Ok(self.get_u32() as usize)
+            }
+        }
+    };
+}
+
+get_length!(Bytes);
+get_length!(&[u8]);
 
 #[cfg(test)]
 mod test {
@@ -232,6 +269,24 @@ mod test {
         let key = PublicKey::from_openssh(key).unwrap();
 
         assert_eq!(make_identities(data).expect("Could not decode"), vec![key])
+    }
+
+    // for now, we are just ignoring the cert returned from the ssh-agent
+    #[test]
+    fn test_make_identities_with_cert() -> Result<(), Error> {
+        // this file contains a regular public key and a cert
+        let data = Bytes::from_static(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/identities_with_cert.bin"
+        )));
+        let key = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/id_ed25519.pub"
+        ));
+        let key = PublicKey::from_openssh(key)?;
+
+        assert_eq!(make_identities(data)?, vec![key]);
+        Ok(())
     }
 
     #[test]
