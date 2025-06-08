@@ -69,7 +69,8 @@ impl Client {
         Client { socket: read_write }
     }
 
-    /// List the identities that has been added to the connected ssh-agent.
+    /// List the identities that has been added to the connected ssh-agent. Identities that
+    /// are not ssh public keys, particularly identities that corresponds to certs, are ignored
     pub fn list_identities(&mut self) -> Result<Vec<PublicKey>> {
         write_message(&mut self.socket, WriteMessage::RequestIdentities)?;
         match read_message(&mut self.socket)? {
