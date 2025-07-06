@@ -120,6 +120,6 @@ impl Client {
 }
 
 fn unexpected_response(message: ReadMessage) -> Error {
-    let error = format!("Agent responded with unexpected message '{:?}'", message);
+    let error = format!("Agent responded with unexpected message '{message:?}'");
     Error::InvalidMessage(error)
 }

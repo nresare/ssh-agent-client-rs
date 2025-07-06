@@ -103,7 +103,7 @@ pub fn write_message(output: &mut dyn Write, message: WriteMessage) -> Result<()
 
 fn write_u32(i: usize, output: &mut dyn Write) -> Result<()> {
     let i = u32::try_from(i)
-        .map_err(|_| Error::InvalidMessage(format!("Could not encode {} into an u32 value", i)))?;
+        .map_err(|_| Error::InvalidMessage(format!("Could not encode {i} into an u32 value")))?;
     output.write_all(&i.to_be_bytes())?;
     Ok(())
 }
@@ -118,8 +118,7 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
     if len > MAX_MESSAGE_SIZE {
         // refusing to allocate more than MAX_MESSAGE_SIZE
         return invalid_data(&format!(
-            "Refusing to read message with size larger than {}",
-            MAX_MESSAGE_SIZE
+            "Refusing to read message with size larger than {MAX_MESSAGE_SIZE}"
         ));
     }
     let mut bytes: BytesMut = BytesMut::zeroed(len - 1);
@@ -164,7 +163,7 @@ fn get_key_type(bytes: &[u8]) -> Result<String> {
         return invalid_data("buffer too short");
     }
     String::from_utf8(buf[..len].to_vec())
-        .map_err(|e| Error::InvalidMessage(format!("Invalid key type: {}", e)))
+        .map_err(|e| Error::InvalidMessage(format!("Invalid key type: {e}")))
 }
 
 // There are a few instances where we read an u32 from a buffer or slice and want the value as
