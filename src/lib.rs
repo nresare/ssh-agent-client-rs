@@ -8,7 +8,7 @@
 //! use ssh_agent_client_rs::Client;
 //! # use std::env;
 //! # use std::path::Path;
-//! # use ssh_agent_client_rs::Error;
+//! # use ssh_agent_client_rs::{Identity, Error};
 //! use ssh_key::PublicKey;
 //!
 //! # let env = env::var("SSH_AUTH_SOCK").unwrap();
@@ -16,13 +16,13 @@
 //! let mut client = Client::connect(path_to_ssh_auth_socket).expect("failed to connect");
 //!
 //! // List the identities that the connected ssh-agent makes available
-//! let identities: Vec<PublicKey> = client.list_identities().expect("failed to list identities");
+//! let identities: Vec<Identity> = client.list_all_identities().expect("failed to list identities");
 //! ```
 
 use crate::codec::{read_message, write_message, ReadMessage, WriteMessage};
 #[cfg(target_family = "windows")]
 use interprocess::os::windows::named_pipe::{pipe_mode, DuplexPipeStream};
-use ssh_key::{PrivateKey, PublicKey, Signature};
+use ssh_key::{Certificate, PrivateKey, PublicKey, Signature};
 use std::io::{Read, Write};
 #[cfg(target_family = "unix")]
 use std::os::unix::net::UnixStream;
@@ -41,6 +41,32 @@ pub trait ReadWrite: Read + Write {}
 /// typically using a Unix socket
 pub struct Client {
     socket: Box<dyn ReadWrite>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Identity {
+    PublicKey(PublicKey),
+    Certificate(Certificate),
+}
+
+impl Identity {
+    /// Extracts the Certificate from the Identity if it is of type Certificate.
+    pub fn as_certificate(&self) -> Option<&Certificate> {
+        if let Identity::Certificate(cert) = self {
+            Some(cert)
+        } else {
+            None
+        }
+    }
+
+    /// Extracts the PublicKey from the Identity if it is of type PublicKey.
+    pub fn as_public_key(&self) -> Option<&PublicKey> {
+        if let Identity::PublicKey(pub_key) = self {
+            Some(pub_key)
+        } else {
+            None
+        }
+    }
 }
 
 impl<T> ReadWrite for T where T: Read + Write {}
@@ -71,7 +97,20 @@ impl Client {
 
     /// List the identities that has been added to the connected ssh-agent. Identities that
     /// are not ssh public keys, particularly identities that corresponds to certs, are ignored
+    #[deprecated(note = "Use list_all_identities() instead")]
     pub fn list_identities(&mut self) -> Result<Vec<PublicKey>> {
+        self.list_all_identities().and_then(|identities| {
+            Ok(identities
+                .into_iter()
+                .filter_map(|i| match i {
+                    Identity::PublicKey(pk) => Some(pk),
+                    _ => None,
+                })
+                .collect())
+        })
+    }
+    /// List the identities that have been added to the connected ssh-agent including certs.
+    pub fn list_all_identities(&mut self) -> Result<Vec<Identity>> {
         write_message(&mut self.socket, WriteMessage::RequestIdentities)?;
         match read_message(&mut self.socket)? {
             ReadMessage::Identities(identities) => Ok(identities),
@@ -100,8 +139,12 @@ impl Client {
     /// Instruct the connected ssh-agent to sign data with the private key associated with the
     /// provided public key. For now, sign requests with RSA keys are hard coded to use the
     /// SHA-512 hashing algorithm.
+    #[deprecated(note = "Use sign_with_identity() instead")]
     pub fn sign(&mut self, key: &PublicKey, data: &[u8]) -> Result<Signature> {
-        write_message(&mut self.socket, WriteMessage::Sign(key, data))?;
+        self.sign_with_identity(&Identity::PublicKey(key.clone()), data)
+    }
+    pub fn sign_with_identity(&mut self, identity: &Identity, data: &[u8]) -> Result<Signature> {
+        write_message(&mut self.socket, WriteMessage::Sign(identity, data))?;
         match read_message(&mut self.socket)? {
             ReadMessage::Signature(sig) => Ok(sig),
             ReadMessage::Failure => Err(Error::RemoteFailure),
