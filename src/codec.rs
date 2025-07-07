@@ -1,9 +1,9 @@
 use crate::codec::ReadMessage::{Failure, Success};
 use crate::Error::UnknownMessageType;
-use crate::{Error, Result};
+use crate::{Error, Identity, Result};
 use bytes::{Buf, Bytes, BytesMut};
 use ssh_encoding::{Decode, Encode};
-use ssh_key::{Algorithm, PrivateKey, PublicKey, Signature};
+use ssh_key::{Algorithm, Certificate, PrivateKey, PublicKey, Signature};
 use std::io::{Read, Write};
 
 type MessageTypeId = u8;
@@ -30,7 +30,7 @@ const MAX_MESSAGE_SIZE: usize = 1024 * 1024;
 //#[repr(u8)]
 pub enum WriteMessage<'a> {
     RequestIdentities,
-    Sign(&'a PublicKey, &'a [u8]),
+    Sign(&'a Identity, &'a [u8]),
     AddIdentity(&'a PrivateKey),
     RemoveIdentity(&'a PrivateKey),
     RemoveAllIdentities,
@@ -40,7 +40,7 @@ pub enum WriteMessage<'a> {
 pub enum ReadMessage {
     Failure,
     Success,
-    Identities(Vec<PublicKey>),
+    Identities(Vec<Identity>),
     Signature(Signature),
 }
 
@@ -82,16 +82,29 @@ pub fn write_message(output: &mut dyn Write, message: WriteMessage) -> Result<()
         }
         WriteMessage::RemoveAllIdentities => buf.write_all(&[SSH_AGENTC_REMOVE_ALL_IDENTITIES])?,
         WriteMessage::Sign(key, data) => {
-            buf.write_all(&[SSH_AGENTC_SIGN_REQUEST])?;
-            write_u32(key.key_data().encoded_len()?, &mut buf)?;
-            key.key_data().encode(&mut buf)?;
-            write_u32(data.len(), &mut buf)?;
-            buf.write_all(data)?;
-            // Emit signature flags, see the spec section 4.5.1
-            match key.algorithm() {
-                // Let's always use the SHA2 512 bit hash when signing RSA keys, to simplify the API
-                Algorithm::Rsa { hash: _ } => write_u32(SSH_AGENT_RSA_SHA2_512, &mut buf)?,
-                _ => write_u32(0, &mut buf)?,
+            match key {
+                Identity::PublicKey(key) => {
+                    buf.write_all(&[SSH_AGENTC_SIGN_REQUEST])?;
+                    write_u32(key.key_data().encoded_len()?, &mut buf)?;
+                    key.key_data().encode(&mut buf)?;
+                    write_u32(data.len(), &mut buf)?;
+                    buf.write_all(data)?;
+                    // Emit signature flags, see the spec section 4.5.1
+                    match key.algorithm() {
+                        // Let's always use the SHA2 512 bit hash when signing RSA keys, to simplify the API
+                        Algorithm::Rsa { hash: _ } => write_u32(SSH_AGENT_RSA_SHA2_512, &mut buf)?,
+                        _ => write_u32(0, &mut buf)?,
+                    }
+                }
+                Identity::Certificate(cert) => {
+                    buf.write_all(&[SSH_AGENTC_SIGN_REQUEST])?;
+                    let encoded_len = cert.encoded_len()?;
+                    write_u32(encoded_len, &mut buf)?;
+                    cert.encode(&mut buf)?;
+                    write_u32(data.len(), &mut buf)?;
+                    buf.write_all(data)?;
+                    write_u32(0, &mut buf)?;
+                }
             }
         }
     }
@@ -131,28 +144,39 @@ fn invalid_data<T>(message: &str) -> Result<T> {
     Err(Error::InvalidMessage(String::from(message)))
 }
 
-fn make_identities(mut buf: Bytes) -> Result<Vec<PublicKey>> {
+fn make_identities(mut buf: Bytes) -> Result<Vec<Identity>> {
     let len = buf.get_length()?;
 
     let mut result = Vec::with_capacity(len);
     for _ in 0..len {
         let key_len = buf.get_length()?;
         let key_bytes = &buf.chunk()[..key_len];
-        // for now, we are just ignoring certificate key types as defined by having a key_type
-        // that contains "-cert-".
         if get_key_type(key_bytes)?.contains("-cert-") {
-            continue;
+            let cert = Certificate::from_bytes(key_bytes)?;
+            buf.advance(key_len);
+            let comment_len = buf.get_length()?;
+            let comment = &buf.chunk()[..comment_len];
+            let comment = std::str::from_utf8(comment).unwrap().to_string();
+            buf.advance(comment_len);
+            // There are no setter for the adding the comment to the certificate after
+            // it has been created, so we have to encode it again.
+            // This is not ideal, but it is the way it is for now.
+            let mut encoded_cert = cert.to_openssh()?;
+            encoded_cert.push(' ');
+            encoded_cert.push_str(&comment);
+            let cert_with_comment = Certificate::from_openssh(&encoded_cert)?;
+            result.push(Identity::Certificate(cert_with_comment));
+        } else {
+            let mut public_key = PublicKey::from_bytes(&buf.chunk()[..key_len])?;
+            buf.advance(key_len);
+            let comment_len = buf.get_length()?;
+            let comment = &buf.chunk()[..comment_len];
+            let comment = std::str::from_utf8(comment).unwrap().to_string();
+            buf.advance(comment_len);
+
+            public_key.set_comment(comment);
+            result.push(Identity::PublicKey(public_key));
         }
-
-        let mut public_key = PublicKey::from_bytes(&buf.chunk()[..key_len])?;
-        buf.advance(key_len);
-        let comment_len = buf.get_length()?;
-        let comment = &buf.chunk()[..comment_len];
-        let comment = std::str::from_utf8(comment).unwrap().to_string();
-        buf.advance(comment_len);
-
-        public_key.set_comment(comment);
-        result.push(public_key);
     }
     Ok(result)
 }
@@ -195,8 +219,8 @@ mod test {
         get_key_type, make_identities, read_message, write_message, write_u32, ReadMessage,
         WriteMessage,
     };
-    use crate::Error;
     use crate::Error::InvalidMessage;
+    use crate::{Error, Identity};
     use bytes::Bytes;
     use ssh_key::{PrivateKey, PublicKey};
     use std::io::Cursor;
@@ -268,12 +292,15 @@ mod test {
             env!("CARGO_MANIFEST_DIR"),
             "/tests/data/id_ed25519.pub"
         ));
-        let key = PublicKey::from_openssh(key).unwrap();
+        let identity: Identity = Identity::PublicKey(PublicKey::from_openssh(key).unwrap());
 
-        assert_eq!(make_identities(data).expect("Could not decode"), vec![key])
+        assert_eq!(
+            make_identities(data).expect("Could not decode"),
+            vec![identity]
+        )
     }
 
-    // for now, we are just ignoring the cert returned from the ssh-agent
+    // If certificates are present, we handle them too from the ssh-agent
     #[test]
     fn test_make_identities_with_cert() -> Result<(), Error> {
         // this file contains a regular public key and a cert
@@ -286,8 +313,16 @@ mod test {
             "/tests/data/id_ed25519.pub"
         ));
         let key = PublicKey::from_openssh(key)?;
-
-        assert_eq!(make_identities(data)?, vec![key]);
+        let identities = make_identities(data)?;
+        assert!(
+            identities.len() == 2,
+            "We should have an array of 2 identities"
+        );
+        // We want to check the type of parsed identities. The first is a public key and second is a certificate
+        assert!(matches!(identities[0], Identity::PublicKey(_)));
+        assert!(matches!(identities[1], Identity::Certificate(_)));
+        // We want to check that the public key is the same as the one we parsed
+        assert!(identities[0].as_public_key().unwrap().key_data() == key.key_data());
         Ok(())
     }
 
@@ -387,9 +422,10 @@ mod test {
         ));
 
         let key = PublicKey::from_openssh(key).expect("failed to parse key");
+        let identity = Identity::PublicKey(key);
 
         let mut output: Vec<u8> = Vec::new();
-        write_message(&mut output, WriteMessage::Sign(&key, b"a")).unwrap();
+        write_message(&mut output, WriteMessage::Sign(&identity, b"a")).unwrap();
         assert_eq!(expected, output.as_slice());
     }
 

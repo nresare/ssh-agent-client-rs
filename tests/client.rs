@@ -1,5 +1,5 @@
 use signature::Signer;
-use ssh_agent_client_rs::{Client, Error};
+use ssh_agent_client_rs::{Client, Error, Identity};
 use ssh_encoding::Decode;
 use ssh_key::Signature;
 use ssh_key::{PrivateKey, PublicKey};
@@ -13,31 +13,38 @@ const IDENTITIES_RESPONSE: &[u8] = include_bytes!("data/ssh-add_response.bin");
 const TEST_DATA: &[u8] = b"foobar";
 
 #[test]
-fn test_list_identities() {
+fn test_list_all_identities() {
     let socket = MockSocket::new(LIST_IDENTITIES, IDENTITIES_RESPONSE);
     let mut client = Client::with_read_write(Box::new(socket));
-    let result = client.list_identities().expect("failed to list identities");
+    let result: Vec<Identity> = client
+        .list_all_identities()
+        .expect("failed to list identities");
 
-    let key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
-    assert_eq!(vec![key], result);
+    let key_identity: Identity =
+        Identity::PublicKey(PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap());
+    assert_eq!(vec![key_identity], result);
 }
 
 #[test]
-fn test_sign() {
+fn test_sign_with_identity() {
     let socket = MockSocket::new(
         include_bytes!("data/sign_request.bin"),
         include_bytes!("data/sign_response.bin"),
     );
 
-    let mut public_key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
+    let mut public_key: PublicKey =
+        PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
     // let's verify that changing the comment doesn't affect the request sent
     public_key.set_comment("another comment");
+    let pubkey_identity: Identity = Identity::PublicKey(public_key.clone());
 
     let private_key = PrivateKey::from_openssh(include_str!("data/id_ed25519")).unwrap();
 
     let mut client = Client::with_read_write(Box::new(socket));
 
-    let result = client.sign(&public_key, TEST_DATA).unwrap();
+    let result = client
+        .sign_with_identity(&pubkey_identity, TEST_DATA)
+        .unwrap();
 
     assert_eq!(private_key.key_data().sign(TEST_DATA.as_ref()), result);
 }
@@ -49,10 +56,13 @@ fn test_sign_remote_failure() {
         include_bytes!("data/failure_response.bin"),
     );
 
-    let public_key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
+    let public_key: Identity =
+        Identity::PublicKey(PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap());
 
     let mut client = Client::with_read_write(Box::new(socket));
-    let result = client.sign(&public_key, TEST_DATA).unwrap_err();
+    let result = client
+        .sign_with_identity(&public_key, TEST_DATA)
+        .unwrap_err();
     assert!(matches!(result, Error::RemoteFailure));
 }
 
@@ -63,10 +73,13 @@ fn test_sign_invalid_response() {
         include_bytes!("data/sign_request.bin"),
     );
 
-    let public_key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
+    let public_key: Identity =
+        Identity::PublicKey(PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap());
 
     let mut client = Client::with_read_write(Box::new(socket));
-    let result = client.sign(&public_key, TEST_DATA).unwrap_err();
+    let result = client
+        .sign_with_identity(&public_key, TEST_DATA)
+        .unwrap_err();
     match result {
         Error::UnknownMessageType(_) => {}
         result => panic!("{}", result),
