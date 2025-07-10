@@ -1,7 +1,7 @@
 use bytes::BytesMut;
 use rand::{rng, RngCore};
 use signature::Verifier;
-use ssh_agent_client_rs::{Client, Identity, Result};
+use ssh_agent_client_rs::{Client, Result};
 use ssh_key::public::KeyData;
 use ssh_key::{Certificate, PublicKey, Signature};
 use std::env;
@@ -23,22 +23,21 @@ fn main() -> Result<()> {
     let key_type = env::args()
         .nth(2)
         .unwrap_or_else(|| String::from("public_key"));
-    let identity;
 
-    match key_type.as_str() {
+    let identity = &match key_type.as_str() {
         "certificate" => {
             println!("Using a certificate");
-            let cert = Certificate::from_openssh(path_or_certificate.as_str())
-                .expect("failed to parse certificate from argument");
-            identity = Identity::Certificate(cert);
+            Certificate::from_openssh(path_or_certificate.as_str())
+                .expect("failed to parse certificate from argument")
+                .into()
         }
         "public_key" => {
             println!("Using a public key");
             let key_bytes = read_to_string(Path::new(&path_or_certificate))?;
-            identity = Identity::PublicKey(PublicKey::from_openssh(key_bytes.as_str())?);
+            PublicKey::from_openssh(key_bytes.as_str())?.into()
         }
         _ => panic!("Unknown key type: {}", key_type),
-    }
+    };
 
     let agent_path = env::var("SSH_AUTH_SOCK").expect("SSH_AUTH_SOCK is not set");
     let mut client = Client::connect(Path::new(agent_path.as_str()))?;
@@ -47,14 +46,8 @@ fn main() -> Result<()> {
     rng().fill_bytes(&mut data);
     let data = data.freeze();
 
-    let sig = client.sign_with_identity(&identity, &data)?;
-    match identity {
-        Identity::PublicKey(key) => verify_signature(&key.key_data(), &data, &sig)?,
-        Identity::Certificate(cert) => {
-            let pubkey = cert.public_key();
-            verify_signature(&pubkey, &data, &sig)?
-        }
-    }
+    let sig = client.sign_with_identity(identity, &data)?;
+    verify_signature(identity.into(), &data, &sig)?;
     Ok(())
 }
 

@@ -20,9 +20,10 @@ fn test_list_all_identities() {
         .list_all_identities()
         .expect("failed to list identities");
 
-    let key_identity: Identity =
-        Identity::PublicKey(PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap());
-    assert_eq!(vec![key_identity], result);
+    let identity: Identity = PublicKey::from_openssh(include_str!("data/id_ed25519.pub"))
+        .unwrap()
+        .into();
+    assert_eq!(vec![identity], result);
 }
 
 #[test]
@@ -36,7 +37,7 @@ fn test_sign_with_identity() {
         PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
     // let's verify that changing the comment doesn't affect the request sent
     public_key.set_comment("another comment");
-    let pubkey_identity: Identity = Identity::PublicKey(public_key.clone());
+    let pubkey_identity: Identity = public_key.into();
 
     let private_key = PrivateKey::from_openssh(include_str!("data/id_ed25519")).unwrap();
 
@@ -56,8 +57,9 @@ fn test_sign_remote_failure() {
         include_bytes!("data/failure_response.bin"),
     );
 
-    let public_key: Identity =
-        Identity::PublicKey(PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap());
+    let public_key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub"))
+        .unwrap()
+        .into();
 
     let mut client = Client::with_read_write(Box::new(socket));
     let result = client
@@ -73,13 +75,12 @@ fn test_sign_invalid_response() {
         include_bytes!("data/sign_request.bin"),
     );
 
-    let public_key: Identity =
-        Identity::PublicKey(PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap());
+    let identity = PublicKey::from_openssh(include_str!("data/id_ed25519.pub"))
+        .unwrap()
+        .into();
 
     let mut client = Client::with_read_write(Box::new(socket));
-    let result = client
-        .sign_with_identity(&public_key, TEST_DATA)
-        .unwrap_err();
+    let result = client.sign_with_identity(&identity, TEST_DATA).unwrap_err();
     match result {
         Error::UnknownMessageType(_) => {}
         result => panic!("{}", result),

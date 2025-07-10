@@ -146,7 +146,7 @@ fn invalid_data<T>(message: &str) -> Result<T> {
 fn make_identities(mut buf: Bytes) -> Result<Vec<Identity>> {
     let len = buf.get_length()?;
 
-    let mut result = Vec::with_capacity(len);
+    let mut result: Vec<Identity> = Vec::with_capacity(len);
     for _ in 0..len {
         let key_len = buf.get_length()?;
         let key_bytes = &buf.chunk()[..key_len];
@@ -164,7 +164,7 @@ fn make_identities(mut buf: Bytes) -> Result<Vec<Identity>> {
             encoded_cert.push(' ');
             encoded_cert.push_str(&comment);
             let cert_with_comment = Certificate::from_openssh(&encoded_cert)?;
-            result.push(Identity::Certificate(cert_with_comment));
+            result.push(cert_with_comment.into());
         } else {
             let mut public_key = PublicKey::from_bytes(&buf.chunk()[..key_len])?;
             buf.advance(key_len);
@@ -174,7 +174,7 @@ fn make_identities(mut buf: Bytes) -> Result<Vec<Identity>> {
             buf.advance(comment_len);
 
             public_key.set_comment(comment);
-            result.push(Identity::PublicKey(public_key));
+            result.push(public_key.into());
         }
     }
     Ok(result)
@@ -291,7 +291,7 @@ mod test {
             env!("CARGO_MANIFEST_DIR"),
             "/tests/data/id_ed25519.pub"
         ));
-        let identity: Identity = Identity::PublicKey(PublicKey::from_openssh(key).unwrap());
+        let identity: Identity = PublicKey::from_openssh(key).unwrap().into();
 
         assert_eq!(
             make_identities(data).expect("Could not decode"),
@@ -421,10 +421,9 @@ mod test {
         ));
 
         let key = PublicKey::from_openssh(key).expect("failed to parse key");
-        let identity = Identity::PublicKey(key);
 
         let mut output: Vec<u8> = Vec::new();
-        write_message(&mut output, WriteMessage::Sign(&identity, b"a")).unwrap();
+        write_message(&mut output, WriteMessage::Sign(&key.into(), b"a")).unwrap();
         assert_eq!(expected, output.as_slice());
     }
 

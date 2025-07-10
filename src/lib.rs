@@ -22,6 +22,7 @@
 use crate::codec::{read_message, write_message, ReadMessage, WriteMessage};
 #[cfg(target_family = "windows")]
 use interprocess::os::windows::named_pipe::{pipe_mode, DuplexPipeStream};
+use ssh_key::public::KeyData;
 use ssh_key::{Certificate, PrivateKey, PublicKey, Signature};
 use std::io::{Read, Write};
 #[cfg(target_family = "unix")]
@@ -45,8 +46,29 @@ pub struct Client {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Identity {
-    PublicKey(PublicKey),
-    Certificate(Certificate),
+    PublicKey(Box<PublicKey>),
+    Certificate(Box<Certificate>),
+}
+
+impl From<PublicKey> for Identity {
+    fn from(value: PublicKey) -> Self {
+        Identity::PublicKey(Box::new(value))
+    }
+}
+
+impl From<Certificate> for Identity {
+    fn from(value: Certificate) -> Self {
+        Identity::Certificate(Box::new(value))
+    }
+}
+
+impl<'a> From<&'a Identity> for &'a KeyData {
+    fn from(value: &'a Identity) -> Self {
+        match value {
+            Identity::PublicKey(pk) => pk.key_data(),
+            Identity::Certificate(cert) => cert.public_key(),
+        }
+    }
 }
 
 impl Identity {
@@ -99,14 +121,14 @@ impl Client {
     /// are not ssh public keys, particularly identities that corresponds to certs, are ignored
     #[deprecated(note = "Use list_all_identities() instead")]
     pub fn list_identities(&mut self) -> Result<Vec<PublicKey>> {
-        self.list_all_identities().and_then(|identities| {
-            Ok(identities
+        self.list_all_identities().map(|identities| {
+            identities
                 .into_iter()
                 .filter_map(|i| match i {
-                    Identity::PublicKey(pk) => Some(pk),
+                    Identity::PublicKey(pk) => Some(*pk),
                     _ => None,
                 })
-                .collect())
+                .collect()
         })
     }
     /// List the identities that have been added to the connected ssh-agent including certs.
@@ -140,8 +162,8 @@ impl Client {
     /// provided public key. For now, sign requests with RSA keys are hard coded to use the
     /// SHA-512 hashing algorithm.
     #[deprecated(note = "Use sign_with_identity() instead")]
-    pub fn sign(&mut self, key: &PublicKey, data: &[u8]) -> Result<Signature> {
-        self.sign_with_identity(&Identity::PublicKey(key.clone()), data)
+    pub fn sign(&mut self, key: impl Into<Identity>, data: &[u8]) -> Result<Signature> {
+        self.sign_with_identity(&key.into(), data)
     }
     pub fn sign_with_identity(&mut self, identity: &Identity, data: &[u8]) -> Result<Signature> {
         write_message(&mut self.socket, WriteMessage::Sign(identity, data))?;
