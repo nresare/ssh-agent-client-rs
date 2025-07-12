@@ -34,4 +34,4 @@ jobs:
     - name: Format check
       run: cargo fmt --check
     - name: Clippy check
-      run: cargo clippy --no-deps --tests
+      run: cargo clippy --no-deps --tests --examples

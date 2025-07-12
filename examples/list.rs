@@ -1,6 +1,5 @@
 use ssh_agent_client_rs::Identity;
 use ssh_agent_client_rs::{Client, Result};
-use ssh_key::public::PublicKey;
 use std::env;
 use std::path::Path;
 
@@ -11,33 +10,20 @@ fn main() -> Result<()> {
     let path = env::var("SSH_AUTH_SOCK").expect("SSH_AUTH_SOCK is not set");
     let mut client = Client::connect(Path::new(path.as_str()))?;
     let identities = client.list_all_identities()?;
-    if identities.len() < 1 {
+    if identities.is_empty() {
         println!("The agent has no identities.");
     } else {
-        identities.iter().for_each(|i| print(i));
+        identities.iter().for_each(print);
     }
     Ok(())
 }
 
 fn print(identity: &Identity) {
-    match identity {
-        Identity::PublicKey(key) => print_pubkey(&key),
-        Identity::Certificate(cert) => print_certificate(&cert),
-    }
-}
-fn print_certificate(cert: &ssh_key::Certificate) {
-    println!(
-        "{} {} {}",
-        cert.public_key().fingerprint(Default::default()),
-        cert.comment(),
-        cert.algorithm().to_string(),
-    );
-}
-fn print_pubkey(key: &PublicKey) {
-    println!(
-        "{} {} {}",
-        key.fingerprint(Default::default()),
-        key.comment(),
-        key.algorithm().to_string(),
-    )
+    let (public_key, comment, suffix) = match identity {
+        Identity::PublicKey(key) => (key.key_data(), key.comment(), ""),
+        Identity::Certificate(cert) => (cert.public_key(), cert.comment(), "-cert"),
+    };
+    let fingerprint = public_key.fingerprint(Default::default());
+    let algo = public_key.algorithm();
+    println!("{fingerprint} {comment} {algo}{suffix}")
 }
