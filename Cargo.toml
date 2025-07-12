@@ -17,6 +17,7 @@ thiserror = "2.0.12"
 
 [dev-dependencies]
 rand = "0.9.1"
+anyhow = "1.0.98"
 
 [target.'cfg(windows)'.dependencies]
 interprocess = "2.2.3"
