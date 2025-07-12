@@ -69,6 +69,12 @@ impl<'a> From<Certificate> for Identity<'a> {
     }
 }
 
+impl<'a> From<&'a Certificate> for Identity<'a> {
+    fn from(value: &'a Certificate) -> Self {
+        Identity::Certificate(Box::new(Cow::Borrowed(value)))
+    }
+}
+
 impl<'a> From<&'a Identity<'a>> for &'a KeyData {
     fn from(value: &'a Identity) -> Self {
         match value {
