@@ -24,6 +24,7 @@ use crate::codec::{read_message, write_message, ReadMessage, WriteMessage};
 use interprocess::os::windows::named_pipe::{pipe_mode, DuplexPipeStream};
 use ssh_key::public::KeyData;
 use ssh_key::{Certificate, PrivateKey, PublicKey, Signature};
+use std::borrow::Cow;
 use std::io::{Read, Write};
 #[cfg(target_family = "unix")]
 use std::os::unix::net::UnixStream;
@@ -45,24 +46,30 @@ pub struct Client {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Identity {
-    PublicKey(Box<PublicKey>),
-    Certificate(Box<Certificate>),
+pub enum Identity<'a> {
+    PublicKey(Box<Cow<'a, PublicKey>>),
+    Certificate(Box<Cow<'a, Certificate>>),
 }
 
-impl From<PublicKey> for Identity {
+impl<'a> From<PublicKey> for Identity<'a> {
     fn from(value: PublicKey) -> Self {
-        Identity::PublicKey(Box::new(value))
+        Identity::PublicKey(Box::new(Cow::Owned(value)))
     }
 }
 
-impl From<Certificate> for Identity {
+impl<'a> From<&'a PublicKey> for Identity<'a> {
+    fn from(value: &'a PublicKey) -> Self {
+        Identity::PublicKey(Box::new(Cow::Borrowed(value)))
+    }
+}
+
+impl<'a> From<Certificate> for Identity<'a> {
     fn from(value: Certificate) -> Self {
-        Identity::Certificate(Box::new(value))
+        Identity::Certificate(Box::new(Cow::Owned(value)))
     }
 }
 
-impl<'a> From<&'a Identity> for &'a KeyData {
+impl<'a> From<&'a Identity<'a>> for &'a KeyData {
     fn from(value: &'a Identity) -> Self {
         match value {
             Identity::PublicKey(pk) => pk.key_data(),
@@ -71,29 +78,9 @@ impl<'a> From<&'a Identity> for &'a KeyData {
     }
 }
 
-impl Identity {
-    /// Extracts the Certificate from the Identity if it is of type Certificate.
-    pub fn as_certificate(&self) -> Option<&Certificate> {
-        if let Identity::Certificate(cert) = self {
-            Some(cert)
-        } else {
-            None
-        }
-    }
-
-    /// Extracts the PublicKey from the Identity if it is of type PublicKey.
-    pub fn as_public_key(&self) -> Option<&PublicKey> {
-        if let Identity::PublicKey(pub_key) = self {
-            Some(pub_key)
-        } else {
-            None
-        }
-    }
-}
-
 impl<T> ReadWrite for T where T: Read + Write {}
 
-impl Client {
+impl<'a> Client {
     /// Constructs a Client connected to a unix socket referenced by path.
     #[cfg(target_family = "unix")]
     pub fn connect(path: &Path) -> Result<Client> {
@@ -125,7 +112,7 @@ impl Client {
             identities
                 .into_iter()
                 .filter_map(|i| match i {
-                    Identity::PublicKey(pk) => Some(*pk),
+                    Identity::PublicKey(pk) => Some(pk.into_owned()),
                     _ => None,
                 })
                 .collect()
@@ -161,11 +148,10 @@ impl Client {
     /// Instruct the connected ssh-agent to sign data with the private key associated with the
     /// provided public key. For now, sign requests with RSA keys are hard coded to use the
     /// SHA-512 hashing algorithm.
-    #[deprecated(note = "Use sign_with_identity() instead")]
-    pub fn sign(&mut self, key: impl Into<Identity>, data: &[u8]) -> Result<Signature> {
-        self.sign_with_identity(&key.into(), data)
+    pub fn sign(&mut self, key: impl Into<Identity<'a>>, data: &[u8]) -> Result<Signature> {
+        self.sign_with_ref(&key.into(), data)
     }
-    pub fn sign_with_identity(&mut self, identity: &Identity, data: &[u8]) -> Result<Signature> {
+    pub fn sign_with_ref(&mut self, identity: &Identity, data: &[u8]) -> Result<Signature> {
         write_message(&mut self.socket, WriteMessage::Sign(identity, data))?;
         match read_message(&mut self.socket)? {
             ReadMessage::Signature(sig) => Ok(sig),

@@ -1,7 +1,7 @@
 use bytes::BytesMut;
 use rand::{rng, RngCore};
 use signature::Verifier;
-use ssh_agent_client_rs::{Client, Result};
+use ssh_agent_client_rs::{Client, Identity, Result};
 use ssh_key::public::KeyData;
 use ssh_key::{Certificate, PublicKey, Signature};
 use std::env;
@@ -24,7 +24,7 @@ fn main() -> Result<()> {
         .nth(2)
         .unwrap_or_else(|| String::from("public_key"));
 
-    let identity = &match key_type.as_str() {
+    let identity: &Identity = &match key_type.as_str() {
         "certificate" => {
             println!("Using a certificate");
             Certificate::from_openssh(path_or_certificate.as_str())
@@ -46,7 +46,7 @@ fn main() -> Result<()> {
     rng().fill_bytes(&mut data);
     let data = data.freeze();
 
-    let sig = client.sign_with_identity(identity, &data)?;
+    let sig = client.sign_with_ref(identity, &data)?;
     verify_signature(identity.into(), &data, &sig)?;
     Ok(())
 }

@@ -30,17 +30,17 @@ const MAX_MESSAGE_SIZE: usize = 1024 * 1024;
 //#[repr(u8)]
 pub enum WriteMessage<'a> {
     RequestIdentities,
-    Sign(&'a Identity, &'a [u8]),
+    Sign(&'a Identity<'a>, &'a [u8]),
     AddIdentity(&'a PrivateKey),
     RemoveIdentity(&'a PrivateKey),
     RemoveAllIdentities,
 }
 
 #[derive(Debug)]
-pub enum ReadMessage {
+pub enum ReadMessage<'a> {
     Failure,
     Success,
-    Identities(Vec<Identity>),
+    Identities(Vec<Identity<'a>>),
     Signature(Signature),
 }
 
@@ -143,7 +143,7 @@ fn invalid_data<T>(message: &str) -> Result<T> {
     Err(Error::InvalidMessage(String::from(message)))
 }
 
-fn make_identities(mut buf: Bytes) -> Result<Vec<Identity>> {
+fn make_identities<'a>(mut buf: Bytes) -> Result<Vec<Identity<'a>>> {
     let len = buf.get_length()?;
 
     let mut result: Vec<Identity> = Vec::with_capacity(len);
@@ -230,8 +230,8 @@ mod test {
 
     #[test]
     fn test_read_message_identities_answer() {
-        let result =
-            read_message(&mut reader(b"\0\0\0\x05\x0c\0\0\0\0")).expect("failed to read_message()");
+        let mut cursor = reader(b"\0\0\0\x05\x0c\0\0\0\0");
+        let result = read_message(&mut cursor).expect("failed to read_message()");
         match result {
             ReadMessage::Identities(identities) => {
                 assert_eq!(identities, vec![])
@@ -242,8 +242,8 @@ mod test {
 
     #[test]
     fn test_read_message_failure() {
-        let result =
-            read_message(&mut reader(b"\0\0\0\x01\x05")).expect("failed to read_message()");
+        let mut cursor = reader(b"\0\0\0\x01\x05");
+        let result = read_message(&mut cursor).expect("failed to read_message()");
         match result {
             ReadMessage::Failure => (),
             _ => panic!("result was not FailureAnswer"),
@@ -252,8 +252,8 @@ mod test {
 
     #[test]
     fn test_read_message_success() {
-        let result =
-            read_message(&mut reader(b"\0\0\0\x01\x06")).expect("failed to read_message()");
+        let mut cursor = reader(b"\0\0\0\x01\x06");
+        let result = read_message(&mut cursor).expect("failed to read_message()");
         match result {
             ReadMessage::Success => (),
             _ => panic!("result was not SuccessAnswer"),
@@ -262,7 +262,8 @@ mod test {
 
     #[test]
     fn test_read_message_unknown() {
-        let result = read_message(&mut reader(b"\0\0\0\x01\xff"));
+        let mut cursor = reader(b"\0\0\0\x01\xff");
+        let result = read_message(&mut cursor);
         match result {
             Err(Error::UnknownMessageType(_)) => (),
             _ => panic!("did not receive expected error UnknownMessageType"),
@@ -271,9 +272,10 @@ mod test {
 
     #[test]
     fn test_read_overly_long_message_length() {
-        let result = read_message(&mut reader(b"\x01\0\0\x01\xff"));
+        let mut cursor = reader(b"\x01\0\0\x01\xff");
+        let result = read_message(&mut cursor);
         match result {
-            Err(Error::InvalidMessage(msg)) => assert_eq!(
+            Err(InvalidMessage(msg)) => assert_eq!(
                 msg,
                 "Refusing to read message with size larger than 1048576"
             ),
@@ -321,7 +323,10 @@ mod test {
         assert!(matches!(identities[0], Identity::PublicKey(_)));
         assert!(matches!(identities[1], Identity::Certificate(_)));
         // We want to check that the public key is the same as the one we parsed
-        assert!(identities[0].as_public_key().unwrap().key_data() == key.key_data());
+        let Identity::PublicKey(pk) = &identities[0] else {
+            panic!("The first element should be a public key");
+        };
+        assert_eq!(pk.key_data(), key.key_data());
         Ok(())
     }
 
@@ -398,7 +403,7 @@ mod test {
         let mut output: Vec<u8> = Vec::new();
         let result = write_u32(usize::MAX, &mut output);
         match result {
-            Err(Error::InvalidMessage(msg)) => {
+            Err(InvalidMessage(msg)) => {
                 assert_eq!(
                     format!("Could not encode {} into an u32 value", usize::MAX),
                     msg

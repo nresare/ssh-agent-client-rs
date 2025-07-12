@@ -43,9 +43,7 @@ fn test_sign_with_identity() {
 
     let mut client = Client::with_read_write(Box::new(socket));
 
-    let result = client
-        .sign_with_identity(&pubkey_identity, TEST_DATA)
-        .unwrap();
+    let result = client.sign(pubkey_identity, TEST_DATA).unwrap();
 
     assert_eq!(private_key.key_data().sign(TEST_DATA.as_ref()), result);
 }
@@ -57,14 +55,10 @@ fn test_sign_remote_failure() {
         include_bytes!("data/failure_response.bin"),
     );
 
-    let public_key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub"))
-        .unwrap()
-        .into();
+    let public_key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
 
     let mut client = Client::with_read_write(Box::new(socket));
-    let result = client
-        .sign_with_identity(&public_key, TEST_DATA)
-        .unwrap_err();
+    let result = client.sign(&public_key, TEST_DATA).unwrap_err();
     assert!(matches!(result, Error::RemoteFailure));
 }
 
@@ -75,12 +69,10 @@ fn test_sign_invalid_response() {
         include_bytes!("data/sign_request.bin"),
     );
 
-    let identity = PublicKey::from_openssh(include_str!("data/id_ed25519.pub"))
-        .unwrap()
-        .into();
+    let key = PublicKey::from_openssh(include_str!("data/id_ed25519.pub")).unwrap();
 
     let mut client = Client::with_read_write(Box::new(socket));
-    let result = client.sign_with_identity(&identity, TEST_DATA).unwrap_err();
+    let result = client.sign(&key, TEST_DATA).unwrap_err();
     match result {
         Error::UnknownMessageType(_) => {}
         result => panic!("{}", result),
