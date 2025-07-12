@@ -221,7 +221,7 @@ mod test {
     use crate::Error::InvalidMessage;
     use crate::{Error, Identity};
     use bytes::Bytes;
-    use ssh_key::{PrivateKey, PublicKey};
+    use ssh_key::{Certificate, PrivateKey, PublicKey};
     use std::io::Cursor;
 
     pub fn reader(data: &'static [u8]) -> Cursor<&'static [u8]> {
@@ -301,33 +301,56 @@ mod test {
         )
     }
 
+    macro_rules! read_str {
+        ($s:expr) => {
+            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/", $s))
+        };
+    }
+
     // If certificates are present, we handle them too from the ssh-agent
     #[test]
     fn test_make_identities_with_cert() -> Result<(), Error> {
-        // this file contains a regular public key and a cert
+        // this file contains a regular public key and a cert, then a key at the end
         let data = Bytes::from_static(include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/tests/data/identities_with_cert.bin"
         )));
-        let key = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/data/id_ed25519.pub"
-        ));
-        let key = PublicKey::from_openssh(key)?;
         let identities = make_identities(data)?;
-        assert!(
-            identities.len() == 2,
-            "We should have an array of 2 identities"
-        );
-        // We want to check the type of parsed identities. The first is a public key and second is a certificate
-        assert!(matches!(identities[0], Identity::PublicKey(_)));
-        assert!(matches!(identities[1], Identity::Certificate(_)));
-        // We want to check that the public key is the same as the one we parsed
-        let Identity::PublicKey(pk) = &identities[0] else {
-            panic!("The first element should be a public key");
-        };
-        assert_eq!(pk.key_data(), key.key_data());
+        assert_eq!(3, identities.len());
+
+        let mut identities = identities.iter();
+        if let Identity::PublicKey(pk) = identities.next().unwrap() {
+            compare_to_key(read_str!("id_ed25519_for_cert.pub"), pk);
+        } else {
+            panic!("did not receive expected public key");
+        }
+
+        if let Identity::Certificate(cert) = identities.next().unwrap() {
+            compare_to_cert(read_str!("id_ed25519_for_cert-cert.pub"), cert);
+        } else {
+            panic!("did not receive expected cert");
+        }
+
+        if let Identity::PublicKey(pk) = identities.next().unwrap() {
+            compare_to_key(read_str!("id_ecdsa.pub"), pk);
+        } else {
+            panic!("did not receive expected public key");
+        }
         Ok(())
+    }
+
+    fn compare_to_key(expected: &str, actual: &PublicKey) {
+        assert_eq!(
+            PublicKey::from_openssh(expected).unwrap().key_data(),
+            actual.key_data()
+        )
+    }
+
+    fn compare_to_cert(expected: &str, actual: &Certificate) {
+        assert_eq!(
+            Certificate::from_openssh(expected).unwrap().public_key(),
+            actual.public_key()
+        )
     }
 
     #[test]
