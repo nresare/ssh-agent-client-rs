@@ -125,7 +125,7 @@ impl<'a> Client {
         })
     }
     /// List the identities that have been added to the connected ssh-agent including certs.
-    pub fn list_all_identities(&mut self) -> Result<Vec<Identity>> {
+    pub fn list_all_identities(&mut self) -> Result<Vec<Identity<'static>>> {
         write_message(&mut self.socket, WriteMessage::RequestIdentities)?;
         match read_message(&mut self.socket)? {
             ReadMessage::Identities(identities) => Ok(identities),

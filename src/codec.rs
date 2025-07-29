@@ -37,10 +37,10 @@ pub enum WriteMessage<'a> {
 }
 
 #[derive(Debug)]
-pub enum ReadMessage<'a> {
+pub enum ReadMessage {
     Failure,
     Success,
-    Identities(Vec<Identity<'a>>),
+    Identities(Vec<Identity<'static>>),
     Signature(Signature),
 }
 
