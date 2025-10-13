@@ -422,6 +422,8 @@ mod test {
     }
 
     #[test]
+    // On 32-bit platforms, usize is 32 bits, so usize::MAX fits in a u32 and the test fails.
+    #[cfg(target_pointer_width = "64")]
     fn test_write_too_large() {
         let mut output: Vec<u8> = Vec::new();
         let result = write_u32(usize::MAX, &mut output);
