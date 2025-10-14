@@ -39,6 +39,10 @@ pub use self::error::Result;
 /// A combination of the std::io::Read and std::io::Write traits.
 pub trait ReadWrite: Read + Write {}
 
+/// Blanket implementation of ReadWrite for all types that implement both Read and Write.
+/// This makes things such as sockets and files compatible with the ReadWrite abstraction
+impl<T> ReadWrite for T where T: Read + Write {}
+
 /// A Client instance is an object that can be used to interact with an ssh-agent,
 /// typically using a Unix socket
 pub struct Client {
@@ -83,8 +87,6 @@ impl<'a> From<&'a Identity<'a>> for &'a KeyData {
         }
     }
 }
-
-impl<T> ReadWrite for T where T: Read + Write {}
 
 impl<'a> Client {
     /// Constructs a Client connected to a unix socket referenced by path.

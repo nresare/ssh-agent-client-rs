@@ -1,5 +1,4 @@
-#!/bin/bash
-
+# usage: bash -x ./create.sh
 # This script details how the test files were created. The ssh-keygen, ssh-add
 # used are the ones shipping with macOS, socat is installed through Homebrew.
 

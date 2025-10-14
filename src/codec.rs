@@ -91,7 +91,7 @@ pub fn write_message(output: &mut dyn Write, message: WriteMessage) -> Result<()
                     buf.write_all(data)?;
                     // Emit signature flags, see the spec section 4.5.1
                     match key.algorithm() {
-                        // Let's always use the SHA2 512 bit hash when signing RSA keys, to simplify the API
+                        // Let's always use the SHA2 512-bit hash when signing RSA keys, to simplify the API
                         Algorithm::Rsa { hash: _ } => write_u32(SSH_AGENT_RSA_SHA2_512, &mut buf)?,
                         _ => write_u32(0, &mut buf)?,
                     }
@@ -124,7 +124,7 @@ fn write_u32(i: usize, output: &mut dyn Write) -> Result<()> {
 fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
     let mut buf = [0u8; 5];
     input.read_exact(&mut buf)?;
-    let mut buf = &buf[..];
+    let mut buf = buf.as_ref();
     let len = buf.get_length()?;
     let message_type = buf.get_u8();
 
@@ -153,31 +153,30 @@ fn make_identities<'a>(mut buf: Bytes) -> Result<Vec<Identity<'a>>> {
         if get_key_type(key_bytes)?.contains("-cert-") {
             let cert = Certificate::from_bytes(key_bytes)?;
             buf.advance(key_len);
-            let comment_len = buf.get_length()?;
-            let comment = &buf.chunk()[..comment_len];
-            let comment = std::str::from_utf8(comment).unwrap().to_string();
-            buf.advance(comment_len);
             // There are no setter for the adding the comment to the certificate after
             // it has been created, so we have to encode it again.
             // This is not ideal, but it is the way it is for now.
-            let mut encoded_cert = cert.to_openssh()?;
-            encoded_cert.push(' ');
-            encoded_cert.push_str(&comment);
+            let encoded_cert = format!("{} {}", cert.to_openssh()?, get_comment(&mut buf)?);
             let cert_with_comment = Certificate::from_openssh(&encoded_cert)?;
             result.push(cert_with_comment.into());
         } else {
             let mut public_key = PublicKey::from_bytes(&buf.chunk()[..key_len])?;
             buf.advance(key_len);
-            let comment_len = buf.get_length()?;
-            let comment = &buf.chunk()[..comment_len];
-            let comment = std::str::from_utf8(comment).unwrap().to_string();
-            buf.advance(comment_len);
-
-            public_key.set_comment(comment);
+            public_key.set_comment(get_comment(&mut buf)?);
             result.push(public_key.into());
         }
     }
     Ok(result)
+}
+
+fn get_comment(buf: &mut Bytes) -> Result<String> {
+    let comment_len = buf.get_length()?;
+    let result = match std::str::from_utf8(&buf.chunk()[..comment_len]) {
+        Ok(comment) => Ok(comment.to_string()),
+        Err(_) => return invalid_data("Invalid utf-8 sequence in comment"),
+    };
+    buf.advance(comment_len);
+    result
 }
 
 fn get_key_type(bytes: &[u8]) -> Result<String> {
