@@ -13,17 +13,19 @@ fn main() -> Result<()> {
     if identities.is_empty() {
         println!("The agent has no identities.");
     } else {
-        identities.iter().for_each(print);
+        for identity in identities {
+            println!("{}", to_string(&identity)?);
+        }
     }
     Ok(())
 }
 
-fn print(identity: &Identity) {
+fn to_string(identity: &Identity) -> Result<String> {
     let (public_key, comment, suffix) = match identity {
         Identity::PublicKey(key) => (key.key_data(), key.comment(), ""),
         Identity::Certificate(cert) => (cert.public_key(), cert.comment(), "-cert"),
     };
     let fingerprint = public_key.fingerprint(Default::default());
     let algo = public_key.algorithm();
-    println!("{fingerprint} {comment} {algo}{suffix}")
+    Ok(format!("{fingerprint} {comment} {algo}{suffix}"))
 }
