@@ -112,8 +112,8 @@ impl<'a> Client {
         Client { socket: read_write }
     }
 
-    /// List the identities that has been added to the connected ssh-agent. Identities that
-    /// are not ssh public keys, particularly identities that corresponds to certs, are ignored
+    /// List the identities that have been added to the connected ssh-agent. Identities that
+    /// are not ssh public keys, particularly identities that correspond to certs, are ignored
     #[deprecated(note = "Use list_all_identities() instead")]
     pub fn list_identities(&mut self) -> Result<Vec<PublicKey>> {
         self.list_all_identities().map(|identities| {
@@ -126,7 +126,7 @@ impl<'a> Client {
                 .collect()
         })
     }
-    /// List the identities that have been added to the connected ssh-agent including certs.
+    /// List the identities that have been added to the connected ssh-agent, including certs.
     pub fn list_all_identities(&mut self) -> Result<Vec<Identity<'static>>> {
         write_message(&mut self.socket, WriteMessage::RequestIdentities)?;
         match read_message(&mut self.socket)? {
