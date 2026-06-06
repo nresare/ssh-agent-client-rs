@@ -1,5 +1,5 @@
 use bytes::BytesMut;
-use rand::{rng, RngCore};
+use rand::{RngCore, rng};
 use signature::Verifier;
 use ssh_agent_client_rs::Client;
 use ssh_key::{Certificate, PublicKey};
