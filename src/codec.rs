@@ -1,5 +1,5 @@
-use crate::codec::ReadMessage::{Failure, Success};
 use crate::Error::UnknownMessageType;
+use crate::codec::ReadMessage::{Failure, Success};
 use crate::{Error, Identity, Result};
 use bytes::{Buf, Bytes, BytesMut};
 use ssh_encoding::{Decode, Encode};
@@ -213,11 +213,11 @@ get_length!(&[u8]);
 
 #[cfg(test)]
 mod test {
-    use crate::codec::{
-        get_key_type, make_identities, read_message, write_message, write_u32, ReadMessage,
-        WriteMessage,
-    };
     use crate::Error::InvalidMessage;
+    use crate::codec::{
+        ReadMessage, WriteMessage, get_key_type, make_identities, read_message, write_message,
+        write_u32,
+    };
     use crate::{Error, Identity};
     use bytes::Bytes;
     use ssh_key::{Certificate, PrivateKey, PublicKey};

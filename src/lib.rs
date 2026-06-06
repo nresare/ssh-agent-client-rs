@@ -19,9 +19,9 @@
 //! let identities: Vec<Identity> = client.list_all_identities().expect("failed to list identities");
 //! ```
 
-use crate::codec::{read_message, write_message, ReadMessage, WriteMessage};
+use crate::codec::{ReadMessage, WriteMessage, read_message, write_message};
 #[cfg(target_family = "windows")]
-use interprocess::os::windows::named_pipe::{pipe_mode, DuplexPipeStream};
+use interprocess::os::windows::named_pipe::{DuplexPipeStream, pipe_mode};
 use ssh_key::public::KeyData;
 use ssh_key::{Certificate, PrivateKey, PublicKey, Signature};
 use std::borrow::Cow;
