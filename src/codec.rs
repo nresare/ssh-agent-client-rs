@@ -27,6 +27,11 @@ const SSH_AGENT_RSA_SHA2_512: usize = 0x04;
 // to avoid allocating far too much memory
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024;
 
+// since we allocate memory for our Vec of identities up front, let's have a high value
+// but one that doesn't make us allocate enough memory for the Vec for it to become a
+// denial of service issue
+const MAX_IDENTITY_COUNT: usize = 1024;
+
 //#[repr(u8)]
 pub enum WriteMessage<'a> {
     RequestIdentities,
@@ -154,15 +159,20 @@ fn invalid_data<T>(message: &str) -> Result<T> {
 
 fn make_identities<'a>(mut buf: Bytes) -> Result<Vec<Identity<'a>>> {
     let len = buf.get_length()?;
-
+    if len > MAX_IDENTITY_COUNT {
+        return invalid_data("too many identities");
+    }
     let mut result: Vec<Identity> = Vec::with_capacity(len);
     for _ in 0..len {
         let key_len = buf.get_length()?;
+        if key_len > buf.len() {
+            return invalid_data("buffer too short");
+        }
         let key_bytes = &buf.chunk()[..key_len];
         if get_key_type(key_bytes)?.contains("-cert-") {
             let cert = Certificate::from_bytes(key_bytes)?;
             buf.advance(key_len);
-            // There are no setter for the adding the comment to the certificate after
+            // There is no setter for adding the comment to the certificate after
             // it has been created, so we have to encode it again.
             // This is not ideal, but it is the way it is for now.
             let encoded_cert = format!("{} {}", cert.to_openssh()?, get_comment(&mut buf)?);
@@ -180,6 +190,9 @@ fn make_identities<'a>(mut buf: Bytes) -> Result<Vec<Identity<'a>>> {
 
 fn get_comment(buf: &mut Bytes) -> Result<String> {
     let comment_len = buf.get_length()?;
+    if comment_len > buf.len() {
+        return invalid_data("invalid comment length");
+    }
     let result = match std::str::from_utf8(&buf.chunk()[..comment_len]) {
         Ok(comment) => Ok(comment.to_string()),
         Err(_) => return invalid_data("Invalid utf-8 sequence in comment"),
@@ -229,6 +242,7 @@ mod test {
     };
     use crate::{Error, Identity};
     use bytes::Bytes;
+    use ssh_encoding::Encode;
     use ssh_key::{Certificate, PrivateKey, PublicKey};
     use std::io::Cursor;
 
@@ -377,6 +391,38 @@ mod test {
             Certificate::from_openssh(expected).unwrap().public_key(),
             actual.public_key()
         )
+    }
+
+    #[test]
+    fn test_make_identities_malicious_data() {
+        // Make sure we are not allocating for a list of 2**32 identities
+        let bytes = Bytes::from_static(b"\xff\xff\xff\xff");
+        let result = make_identities(bytes);
+        match result {
+            Err(InvalidMessage(_)) => (),
+            _ => panic!("did not receive expected error InvalidData"),
+        }
+
+        // Make sure that we don't panic if the key length specified to be longer than the remaining buffer
+        let bytes = Bytes::from_static(b"\0\0\0\x01\0\0\0\x25");
+        let result = make_identities(bytes);
+        match result {
+            Err(InvalidMessage(_)) => (),
+            _ => panic!("did not receive expected error InvalidData"),
+        }
+
+        // Make sure that we don't panic if the comment length is specified to be longer than the remaining buffer
+        let key = PublicKey::from_openssh(read_str!("id_ed25519.pub")).unwrap();
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&1_u32.to_be_bytes());
+        bytes.extend_from_slice(&(key.key_data().encoded_len().unwrap() as u32).to_be_bytes());
+        key.key_data().encode(&mut bytes).unwrap();
+        bytes.extend_from_slice(&1_u32.to_be_bytes());
+        let result = make_identities(bytes.into());
+        match result {
+            Err(InvalidMessage(_)) => (),
+            _ => panic!("did not receive expected error InvalidData"),
+        }
     }
 
     #[test]
