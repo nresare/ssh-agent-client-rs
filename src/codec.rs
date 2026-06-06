@@ -4,7 +4,7 @@ use crate::{Error, Identity, Result};
 use bytes::{Buf, Bytes, BytesMut};
 use ssh_encoding::{Decode, Encode};
 use ssh_key::{Algorithm, Certificate, PrivateKey, PublicKey, Signature};
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 
 type MessageTypeId = u8;
 // This list is copied from
@@ -123,7 +123,13 @@ fn write_u32(i: usize, output: &mut dyn Write) -> Result<()> {
 
 fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
     let mut buf = [0u8; 5];
-    input.read_exact(&mut buf)?;
+    match input.read_exact(&mut buf) {
+        Ok(()) => {}
+        Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
+            return invalid_data("message is too short");
+        }
+        Err(e) => return Err(e.into()),
+    }
     let mut buf = buf.as_ref();
     let len = buf.get_length()?;
     let message_type = buf.get_u8();
@@ -133,6 +139,9 @@ fn read_packet(mut input: impl Read) -> Result<(MessageTypeId, Bytes)> {
         return invalid_data(&format!(
             "Refusing to read message with size larger than {MAX_MESSAGE_SIZE}"
         ));
+    }
+    if len < 1 {
+        return invalid_data("user supplied message length is too short");
     }
     let mut bytes: BytesMut = BytesMut::zeroed(len - 1);
     input.read_exact(bytes.as_mut())?;
@@ -236,6 +245,24 @@ mod test {
                 assert_eq!(identities, vec![])
             }
             _ => panic!("result was not IdentitiesAnswer"),
+        }
+    }
+
+    #[test]
+    fn test_invalid_message() {
+        // this message is too short, but long enough for the first read to succeed
+        let mut cursor = reader(b"\0\0\0\0\x0d");
+        let result = read_message(&mut cursor);
+        match result {
+            Err(Error::InvalidMessage(_)) => (),
+            _ => panic!("did not receive expected error InvalidData"),
+        }
+        // this message is just too short
+        let mut cursor = reader(b"\0\0\0\0");
+        let result = read_message(&mut cursor);
+        match result {
+            Err(Error::InvalidMessage(_)) => (),
+            _ => panic!("did not receive expected error InvalidData"),
         }
     }
 
