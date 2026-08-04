@@ -39,7 +39,8 @@ The basic idea is to create a `Client` instance and call its public methods to i
 ## Windows support
 
 Support for communicating with the `openssh-ssh-agent` shipped with Windows 11 is implemented using
-named pipes and the `interprocess` crate. To try the various example binaries, first set the `SSH_AUTH_SOCK`
+named pipes and the `interprocess` crate. It is enabled by the default
+`windows-named-pipe` feature and can be omitted by Unix-only consumers. To try the various example binaries, first set the `SSH_AUTH_SOCK`
 variable as follows:
 ```cmd
 > set SSH_AUTH_SOCK=\\.\pipe\openssh-ssh-agent
@@ -48,6 +49,15 @@ variable as follows:
 
 If you are using the ssh-agent shipped with [git for windows](https://gitforwindows.org/) you might need to
 use the Unix socket emulation implementation available from https://github.com/bestia-dev/ssh_agent_client_rs_git_bash
+
+## Algorithm features
+
+The default `all-key-algorithms` feature preserves support for all algorithms
+handled by `ssh-key`. Consumers with a closed algorithm profile can disable
+default features and enable only the required algorithm, such as `ed25519`.
+When a shared agent may expose other key types, the
+`ignore-unsupported-identities` feature skips identities whose algorithm was
+not compiled in while retaining malformed-message failures.
 
 ## License
 

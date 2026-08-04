@@ -20,7 +20,7 @@
 //! ```
 
 use crate::codec::{ReadMessage, WriteMessage, read_message, write_message};
-#[cfg(target_family = "windows")]
+#[cfg(all(target_family = "windows", feature = "windows-named-pipe"))]
 use interprocess::os::windows::named_pipe::{DuplexPipeStream, pipe_mode};
 use ssh_key::public::KeyData;
 use ssh_key::{Certificate, PrivateKey, PublicKey, Signature};
@@ -98,7 +98,7 @@ impl<'a> Client {
 
     // If you want to communicate with the ssh-agent shipped with windows you probably want to pass
     // Path::new(r"\\.\pipe\openssh-ssh-agent")
-    #[cfg(target_family = "windows")]
+    #[cfg(all(target_family = "windows", feature = "windows-named-pipe"))]
     pub fn connect(path: &Path) -> Result<Client> {
         let pipe = DuplexPipeStream::<pipe_mode::Bytes>::connect_by_path(path)?;
         Ok(Client {

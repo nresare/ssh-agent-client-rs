@@ -9,9 +9,16 @@ Pure rust implementation of the ssh-agent protocol. It can be used to write clie
 edition = "2024"
 rust-version = "1.85.1"
 
+[features]
+default = ["all-key-algorithms", "windows-named-pipe"]
+all-key-algorithms = ["ssh-key/crypto"]
+ed25519 = ["ssh-key/ed25519"]
+ignore-unsupported-identities = []
+windows-named-pipe = ["dep:interprocess"]
+
 [dependencies]
 bytes = "1.11"
-ssh-key = { version = "0.6", features = ["crypto"] }
+ssh-key = { version = "0.6", default-features = false, features = ["std"] }
 ssh-encoding = "0.2"
 signature = "2.2"
 thiserror = "2.0"
@@ -21,4 +28,4 @@ rand = "0.9"
 anyhow = "1.0"
 
 [target.'cfg(windows)'.dependencies]
-interprocess = "2.2"
+interprocess = { version = "2.2", optional = true }

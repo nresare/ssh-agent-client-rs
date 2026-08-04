@@ -168,21 +168,29 @@ fn make_identities<'a>(mut buf: Bytes) -> Result<Vec<Identity<'a>>> {
         if key_len > buf.len() {
             return invalid_data("buffer too short");
         }
-        let key_bytes = &buf.chunk()[..key_len];
-        if get_key_type(key_bytes)?.contains("-cert-") {
-            let cert = Certificate::from_bytes(key_bytes)?;
-            buf.advance(key_len);
-            // There is no setter for adding the comment to the certificate after
-            // it has been created, so we have to encode it again.
-            // This is not ideal, but it is the way it is for now.
-            let encoded_cert = format!("{} {}", cert.to_openssh()?, get_comment(&mut buf)?);
-            let cert_with_comment = Certificate::from_openssh(&encoded_cert)?;
-            result.push(cert_with_comment.into());
+        let key_bytes = buf.split_to(key_len);
+        let is_certificate = get_key_type(&key_bytes)?.contains("-cert-");
+        let comment = get_comment(&mut buf)?;
+        let identity = if is_certificate {
+            Certificate::from_bytes(&key_bytes)
+                .and_then(|cert| {
+                    // There is no setter for adding the comment to the certificate after
+                    // it has been created, so we have to encode it again.
+                    let encoded_cert = format!("{} {comment}", cert.to_openssh()?);
+                    Certificate::from_openssh(&encoded_cert)
+                })
+                .map(Identity::from)
         } else {
-            let mut public_key = PublicKey::from_bytes(&buf.chunk()[..key_len])?;
-            buf.advance(key_len);
-            public_key.set_comment(get_comment(&mut buf)?);
-            result.push(public_key.into());
+            PublicKey::from_bytes(&key_bytes).map(|mut public_key| {
+                public_key.set_comment(comment);
+                Identity::from(public_key)
+            })
+        };
+        match identity {
+            Ok(identity) => result.push(identity),
+            #[cfg(feature = "ignore-unsupported-identities")]
+            Err(ssh_key::Error::AlgorithmUnknown) => {}
+            Err(error) => return Err(error.into()),
         }
     }
     Ok(result)
@@ -376,6 +384,27 @@ mod test {
         } else {
             panic!("did not receive expected public key");
         }
+        Ok(())
+    }
+
+    #[cfg(all(
+        feature = "ignore-unsupported-identities",
+        not(feature = "all-key-algorithms")
+    ))]
+    #[test]
+    fn feature_limited_client_ignores_only_unsupported_algorithms() -> Result<(), Error> {
+        let data = Bytes::from_static(include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/identities_with_cert.bin"
+        )));
+        let identities = make_identities(data)?;
+        assert_eq!(2, identities.len());
+        assert!(identities.iter().all(|identity| match identity {
+            Identity::PublicKey(key) => key.algorithm().as_str() == "ssh-ed25519",
+            Identity::Certificate(certificate) => {
+                certificate.public_key().algorithm().as_str() == "ssh-ed25519"
+            }
+        }));
         Ok(())
     }
 
