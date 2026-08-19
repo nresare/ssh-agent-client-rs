@@ -86,37 +86,39 @@ pub fn write_message(output: &mut dyn Write, message: WriteMessage) -> Result<()
             key.public_key().key_data().encode(&mut buf)?;
         }
         WriteMessage::RemoveAllIdentities => buf.write_all(&[SSH_AGENTC_REMOVE_ALL_IDENTITIES])?,
-        WriteMessage::Sign(key, data) => {
-            match key {
-                Identity::PublicKey(key) => {
-                    buf.write_all(&[SSH_AGENTC_SIGN_REQUEST])?;
-                    write_u32(key.key_data().encoded_len()?, &mut buf)?;
-                    key.key_data().encode(&mut buf)?;
-                    write_u32(data.len(), &mut buf)?;
-                    buf.write_all(data)?;
-                    // Emit signature flags, see the spec section 4.5.1
-                    match key.algorithm() {
-                        // Let's always use the SHA2 512-bit hash when signing RSA keys, to simplify the API
-                        Algorithm::Rsa { hash: _ } => write_u32(SSH_AGENT_RSA_SHA2_512, &mut buf)?,
-                        _ => write_u32(0, &mut buf)?,
-                    }
-                }
-                Identity::Certificate(cert) => {
-                    buf.write_all(&[SSH_AGENTC_SIGN_REQUEST])?;
-                    let encoded_len = cert.encoded_len()?;
-                    write_u32(encoded_len, &mut buf)?;
-                    cert.encode(&mut buf)?;
-                    write_u32(data.len(), &mut buf)?;
-                    buf.write_all(data)?;
-                    write_u32(0, &mut buf)?;
-                }
+        WriteMessage::Sign(key, data) => match key {
+            Identity::PublicKey(key) => {
+                buf.write_all(&[SSH_AGENTC_SIGN_REQUEST])?;
+                write_u32(key.key_data().encoded_len()?, &mut buf)?;
+                key.key_data().encode(&mut buf)?;
+                write_u32(data.len(), &mut buf)?;
+                buf.write_all(data)?;
+                write_u32(signature_flags(key.algorithm()), &mut buf)?;
             }
-        }
+            Identity::Certificate(cert) => {
+                buf.write_all(&[SSH_AGENTC_SIGN_REQUEST])?;
+                let encoded_len = cert.encoded_len()?;
+                write_u32(encoded_len, &mut buf)?;
+                cert.encode(&mut buf)?;
+                write_u32(data.len(), &mut buf)?;
+                buf.write_all(data)?;
+                write_u32(signature_flags(cert.algorithm()), &mut buf)?;
+            }
+        },
     }
 
     write_u32(buf.len(), output)?;
     output.write_all(&buf)?;
     Ok(())
+}
+
+// Emit signature flags, see the spec section 4.5.1. Let's always use the SHA2
+// 512-bit hash when signing with RSA, to simplify the API.
+fn signature_flags(algorithm: Algorithm) -> usize {
+    match algorithm {
+        Algorithm::Rsa { hash: _ } => SSH_AGENT_RSA_SHA2_512,
+        _ => 0,
+    }
 }
 
 fn write_u32(i: usize, output: &mut dyn Write) -> Result<()> {
@@ -237,8 +239,8 @@ get_length!(&[u8]);
 mod test {
     use crate::Error::InvalidMessage;
     use crate::codec::{
-        ReadMessage, WriteMessage, get_key_type, make_identities, read_message, write_message,
-        write_u32,
+        ReadMessage, SSH_AGENT_RSA_SHA2_512, WriteMessage, get_key_type, make_identities,
+        read_message, write_message, write_u32,
     };
     use crate::{Error, Identity};
     use bytes::Bytes;
@@ -527,6 +529,27 @@ mod test {
         let mut output: Vec<u8> = Vec::new();
         write_message(&mut output, WriteMessage::Sign(&key.into(), b"a")).unwrap();
         assert_eq!(expected, output.as_slice());
+    }
+
+    // let's verify that RSA certificates also request SSH_AGENT_RSA_SHA2_512
+    #[test]
+    fn test_write_sign_rsa_certificate() {
+        let cert = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/data/id_rsa-cert.pub",
+        ));
+        let cert = Certificate::from_openssh(cert).expect("failed to parse certificate");
+
+        let mut output: Vec<u8> = Vec::new();
+        write_message(&mut output, WriteMessage::Sign(&cert.into(), b"a")).unwrap();
+
+        // The last 4 bytes of the message are the u32 signature flags field.
+        let flags = &output[output.len() - 4..];
+        assert_eq!(
+            flags,
+            (SSH_AGENT_RSA_SHA2_512 as u32).to_be_bytes(),
+            "RSA certificates must request the rsa-sha2-512 signature flag, not the legacy 0 (ssh-rsa/SHA-1) flag"
+        );
     }
 
     #[test]
