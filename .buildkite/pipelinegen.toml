@@ -1,2 +1,1 @@
-# This file contains configuration for pipelinegen from the https://github.com/nresare/bktools project
 variant = "rust"
