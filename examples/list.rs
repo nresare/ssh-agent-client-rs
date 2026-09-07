@@ -22,7 +22,7 @@ fn main() -> Result<()> {
 
 fn to_string(identity: &Identity) -> Result<String> {
     let (public_key, comment, suffix) = match identity {
-        Identity::PublicKey(key) => (key.key_data(), key.comment(), ""),
+        Identity::PublicKey(key) => (key.key_data(), key.comment().as_ref(), ""),
         Identity::Certificate(cert) => (cert.public_key(), cert.comment(), "-cert"),
     };
     let fingerprint = public_key.fingerprint(Default::default());
